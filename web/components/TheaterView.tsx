@@ -272,7 +272,7 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
           {issue.source_summary?.statement}
         </p>
         <p className="font-mono text-[9px] text-[#918c7d]">
-          Symbology: MIL-STD-2525E-informed framing; icons render only where the standard defines one.
+          Symbology: MIL-STD-2525E affiliation frames carrying the event serial (the Activities set defines no icons for conventional operations).
           Dashed frames mark region-level precision; tight groups are displaced for legibility.
         </p>
       </footer>

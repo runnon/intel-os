@@ -166,7 +166,7 @@ export default function TheaterMap({ events, selectedId, onSelect }: Props) {
           "text-halo-width": 1.2, // GEO-5: halo keeps labels legible over linework
         },
       });
-      // serial number badge, proof-build style
+      // serial number centered INSIDE the frame, proof-build style
       map.addLayer({
         id: "event-numbers",
         type: "symbol",
@@ -174,14 +174,12 @@ export default function TheaterMap({ events, selectedId, onSelect }: Props) {
         layout: {
           "text-field": ["get", "num"],
           "text-size": 10,
-          "text-offset": [1.1, -1.1],
           "text-allow-overlap": true,
+          "text-ignore-placement": true,
           "text-font": LABEL_FONT,
         },
         paint: {
           "text-color": "#171712",
-          "text-halo-color": "#f5f2ea",
-          "text-halo-width": 1.6,
         },
       });
 

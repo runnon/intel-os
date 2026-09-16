@@ -16,7 +16,10 @@ export function symbolFor(ev: Pick<TheaterEvent, 'affiliation' | 'category' | 'p
   width: number;
   height: number;
 } {
-  const sidc = eventSidc(ev);
+  // Map display renders the affiliation FRAME only (reserved entity 110000 —
+  // no interior icon art) so the event serial can sit centered inside the
+  // symbol, proof-build style. GEO-4 explicitly sanctions framing-only display.
+  const sidc = eventSidc(ev).slice(0, 10) + '1100000000';
   const cached = cache.get(sidc);
   if (cached) return { sidc, ...cached };
   const symbol = new ms.Symbol(sidc, {

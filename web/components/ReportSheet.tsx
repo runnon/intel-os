@@ -92,8 +92,8 @@ export default function ReportSheet({ issue }: { issue: IssueRow }) {
             tight groups are displaced for legibility. Positions derive from place names
             validated against a gazetteer; region-level reports carry dashed frames; events
             below the geolocation confidence threshold are listed without a plotted point.
-            Symbology is MIL-STD-2525E-informed framing — the Activities symbol set defines no
-            icons for conventional operations.
+            Symbols are MIL-STD-2525E affiliation frames carrying the event serial — the
+            Activities symbol set defines no icons for conventional operations.
           </p>
 
           {/* event callouts, proof-build style */}
