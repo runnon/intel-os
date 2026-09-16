@@ -15,11 +15,13 @@ const WINDOW_PRESETS: { label: string; hours: number | null }[] = [
   { label: "ALL", hours: null },
 ];
 
-export const AFF_META: { key: Affiliation; label: string; hex: string }[] = [
-  { key: "hostile", label: "Hostile action", hex: "#a02c2c" },
-  { key: "friendly", label: "Friendly action", hex: "#1f4e79" },
-  { key: "neutral", label: "Neutral", hex: "#1f4a2e" },
-  { key: "unknown", label: "Unknown / contested", hex: "#b08800" },
+// hex = dark accent for text/spines; fill = the exact MIL-STD-2525 light fill
+// milsymbol paints on the map (Table XV light set) so the legend matches the symbols.
+export const AFF_META: { key: Affiliation; label: string; hex: string; fill: string }[] = [
+  { key: "hostile", label: "Hostile action", hex: "#a02c2c", fill: "rgb(255,128,128)" },
+  { key: "friendly", label: "Friendly action", hex: "#1f4e79", fill: "rgb(128,224,255)" },
+  { key: "neutral", label: "Neutral", hex: "#1f4a2e", fill: "rgb(170,255,170)" },
+  { key: "unknown", label: "Unknown / contested", hex: "#b08800", fill: "rgb(255,255,128)" },
 ];
 
 const CATS: EventCategory[] = ["strike", "ground", "maritime", "infrastructure", "air-defense", "movement", "political", "other"];
@@ -203,8 +205,12 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
                   }`}
                 >
                   <span
-                    className="inline-block w-2.5 h-2.5 rotate-45 border"
-                    style={{ backgroundColor: active ? a.hex : "transparent", borderColor: a.hex }}
+                    className="inline-block w-2.5 h-2.5 rotate-45"
+                    style={{
+                      backgroundColor: active ? a.fill : "transparent",
+                      border: "1.5px solid rgba(10,14,18,0.9)",
+                      opacity: active ? 1 : 0.4,
+                    }}
                   />
                   {a.label}
                 </button>
@@ -217,6 +223,7 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
             <EventCallout
               event={selected}
               color={affColor(selected.affiliation)}
+              fill={AFF_META.find((m) => m.key === selected.affiliation)?.fill ?? "#f5f2ea"}
               onClose={() => updateView({ selectedEvent: null })}
               onPrev={() => step(-1)}
               onNext={() => step(1)}

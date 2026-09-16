@@ -9,12 +9,14 @@ import { zulu } from "./TheaterView";
 export default function EventCallout({
   event,
   color,
+  fill,
   onClose,
   onPrev,
   onNext,
 }: {
   event: NumberedEvent;
   color: string;
+  fill: string;
   onClose: () => void;
   onPrev: () => void;
   onNext: () => void;
@@ -27,10 +29,10 @@ export default function EventCallout({
       {/* header */}
       <div className="flex items-start gap-3 px-4 pt-3">
         <span
-          className="shrink-0 w-6 h-6 mt-0.5 rotate-45 border flex items-center justify-center"
-          style={{ backgroundColor: color, borderColor: "#171712" }}
+          className="shrink-0 w-6 h-6 mt-0.5 rotate-45 flex items-center justify-center"
+          style={{ backgroundColor: fill, border: "2px solid rgba(10,14,18,0.9)" }}
         >
-          <span className="-rotate-45 font-mono text-[10px] font-bold text-[#f5f2ea]">{event.num}</span>
+          <span className="-rotate-45 font-mono text-[10px] font-bold text-[#171712]">{event.num}</span>
         </span>
         <div className="min-w-0 flex-1">
           <h3 className="headline text-base leading-tight">{event.placeName}</h3>
