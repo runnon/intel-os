@@ -185,7 +185,7 @@ export default function TheaterMap({ events, selectedId, onSelect }: Props) {
     if (ev && ev.lat != null && ev.lon != null) {
       const pos = displaced(events).get(ev.id)!;
       src?.setData({ type: "FeatureCollection", features: [{ type: "Feature", geometry: { type: "Point", coordinates: pos }, properties: {} }] });
-      map.easeTo({ center: pos, zoom: Math.max(map.getZoom(), 5.6), duration: 500, padding: { left: 380 } });
+      map.easeTo({ center: pos, zoom: Math.max(map.getZoom(), 5.6), duration: 500, padding: { left: 400 } });
     } else {
       src?.setData({ type: "FeatureCollection", features: [] });
     }
