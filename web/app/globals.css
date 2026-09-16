@@ -57,15 +57,22 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
-   Export / print (UX-5): the sheet is a landscape GEOINT product like the
-   OS-IRN-26-001 proof build. Force landscape paper, edge-to-edge, and let the
-   report body use the full page width so the map spans the same width as the
-   rest of the sheet.
+   Export / print (UX-5): the sheet is a MULTI-PAGE landscape GEOINT product
+   like the OS-IRN-26-001 proof build. Landscape paper, edge-to-edge, full-width
+   map, running UNCLASSIFIED banners on EVERY page (MARK-2/3), and page breaks
+   that keep the map with the masthead and never split an event card.
    --------------------------------------------------------------------------- */
+
+/* Running banners exist only in print — fixed elements repeat on every page. */
+.print-running-banner {
+  display: none;
+}
+
 @media print {
   @page {
     size: landscape;
-    margin: 8mm;
+    /* top/bottom margins reserve space for the running marking banners */
+    margin: 12mm 8mm;
   }
   html,
   body {
@@ -79,12 +86,52 @@ body {
     box-shadow: none !important;
     border: 0 !important;
   }
-  /* Keep the WebGL map crisp and force full width across the printed sheet. */
   .report-map {
     width: 100% !important;
   }
   .maplibregl-ctrl-top-left,
   .maplibregl-ctrl-bottom-right {
     display: none !important; /* zoom + attribution buttons are noise on paper */
+  }
+
+  /* The in-flow green bars print once; the running banners cover every page. */
+  .sheet-banner {
+    display: none !important;
+  }
+  .print-running-banner {
+    display: flex !important;
+    position: fixed;
+    left: 0;
+    right: 0;
+    height: 9mm;
+    align-items: center;
+    justify-content: center;
+    background: #1f4a2e;
+    color: #dcead9;
+    font-family: var(--font-ui), monospace;
+    font-size: 9px;
+    letter-spacing: 0.28em;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .print-running-banner.top {
+    top: 0;
+  }
+  .print-running-banner.bottom {
+    bottom: 0;
+  }
+
+  /* Pagination: keep the map page intact, start the event register on a new
+     page, and never break a card, the masthead, or a footer block mid-element. */
+  .break-before-page {
+    break-before: page;
+  }
+  .avoid-break {
+    break-inside: avoid;
+  }
+
+  /* Ensure the sheet isn't clipped by the on-screen scroll container. */
+  .report-scroll {
+    overflow: visible !important;
   }
 }

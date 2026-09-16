@@ -34,16 +34,20 @@ export default function ReportSheet({ issue }: { issue: IssueRow }) {
   const dateRange = `${zulu(issue.window_start)} – ${zulu(issue.info_cutoff)}`;
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#e9e6dc] text-[#171712] print:bg-white">
+    <div className="report-scroll flex-1 overflow-y-auto bg-[#e9e6dc] text-[#171712] print:bg-white">
+      {/* running marking banners — fixed, so they repeat on every printed page (MARK-2/3) */}
+      <div className="print-running-banner top">UNCLASSIFIED · OPEN SOURCES ONLY · NOT AN OFFICIAL GOVERNMENT PRODUCT</div>
+      <div className="print-running-banner bottom">UNCLASSIFIED · OPEN SOURCES ONLY · NOT AN OFFICIAL GOVERNMENT PRODUCT</div>
+
       <div className="report-sheet max-w-6xl mx-auto my-6 print:my-0 bg-[#f5f2ea] shadow-lg print:shadow-none border border-black/10">
         {/* sheet banner (MARK-1: marking on the sheet itself) */}
-        <div className="bg-[#1f4a2e] text-[#dcead9] text-center text-[10px] tracking-[0.3em] font-mono py-1">
+        <div className="sheet-banner bg-[#1f4a2e] text-[#dcead9] text-center text-[10px] tracking-[0.3em] font-mono py-1">
           UNCLASSIFIED · OPEN SOURCES ONLY · NOT AN OFFICIAL GOVERNMENT PRODUCT
         </div>
 
         <div className="p-8 print:p-6">
           {/* masthead */}
-          <div className="flex flex-wrap justify-between gap-6 border-b-2 border-[#171712] pb-4">
+          <div className="avoid-break flex flex-wrap justify-between gap-6 border-b-2 border-[#171712] pb-4">
             <div className="max-w-xl">
               <p className="font-mono text-[10px] tracking-[0.25em] text-black/60">
                 SITUATION UPDATE PRODUCT · {issue.aor} · GRAPHIC · MACHINE-ASSEMBLED
@@ -84,12 +88,12 @@ export default function ReportSheet({ issue }: { issue: IssueRow }) {
           </div>
 
           {/* map — full width of the sheet, proof-build style */}
-          <div className="report-map relative w-full h-[540px] mt-5 border border-black/25 print:h-[520px]">
+          <div className="report-map avoid-break relative w-full h-[540px] mt-5 border border-black/25 print:h-[520px]">
             <TheaterMap events={plottable} selectedId={null} onSelect={() => {}} forExport />
           </div>
 
           {/* legend + methodology, proof-build footer row under the map */}
-          <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-4 mt-2 border-t border-black/15 pt-2.5">
+          <div className="avoid-break grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-4 mt-2 border-t border-black/15 pt-2.5">
             <div>
               <h4 className="font-mono text-[10px] tracking-widest text-black/60">LEGEND</h4>
               <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1">
@@ -127,10 +131,17 @@ export default function ReportSheet({ issue }: { issue: IssueRow }) {
             </div>
           </div>
 
-          {/* event callouts, proof-build style */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-5">
-            {filtered.map((e) => (
-              <div key={e.id} className={`bg-white border border-black/15 border-l-4 ${affBorder(e.affiliation)} p-3 break-inside-avoid`}>
+          {/* event register — begins on a fresh page in the exported product */}
+          <div className="break-before-page">
+            <div className="avoid-break flex items-baseline justify-between border-b-2 border-[#171712] mt-6 print:mt-0 pb-1">
+              <h2 className="headline text-lg">(U) Event Register</h2>
+              <span className="font-mono text-[10px] text-black/55">
+                {issue.serial} · {filtered.length} EVENTS · INFO CUT-OFF {zulu(issue.info_cutoff)}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
+              {filtered.map((e) => (
+                <div key={e.id} className={`avoid-break bg-white border border-black/15 border-l-4 ${affBorder(e.affiliation)} p-3`}>
                 <div className="flex items-start justify-between gap-2">
                   <h3 className="font-sans font-bold text-[13px] uppercase leading-tight">{e.placeName}</h3>
                   <span className="shrink-0 w-5 h-5 rounded-full bg-[#171712] text-white font-mono text-[10px] flex items-center justify-center">
@@ -148,12 +159,13 @@ export default function ReportSheet({ issue }: { issue: IssueRow }) {
                     <span className="text-[10px] leading-snug">{e.usImpact}</span>
                   </div>
                 )}
-              </div>
-            ))}
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* change log + sourcing */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+          <div className="avoid-break grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
             <div className="border border-black/20 p-3">
               <h4 className="font-mono text-[10px] tracking-widest text-black/60">(U) CHANGE FROM PREVIOUS ISSUE</h4>
               {issue.change_log?.length ? (
