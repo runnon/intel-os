@@ -35,7 +35,7 @@ export default function ReportSheet({ issue }: { issue: IssueRow }) {
 
   return (
     <div className="flex-1 overflow-y-auto bg-[#e9e6dc] text-[#171712] print:bg-white">
-      <div className="max-w-6xl mx-auto my-6 print:my-0 bg-[#f5f2ea] shadow-lg print:shadow-none border border-black/10">
+      <div className="report-sheet max-w-6xl mx-auto my-6 print:my-0 bg-[#f5f2ea] shadow-lg print:shadow-none border border-black/10">
         {/* sheet banner (MARK-1: marking on the sheet itself) */}
         <div className="bg-[#1f4a2e] text-[#dcead9] text-center text-[10px] tracking-[0.3em] font-mono py-1">
           UNCLASSIFIED · OPEN SOURCES ONLY · NOT AN OFFICIAL GOVERNMENT PRODUCT
@@ -83,18 +83,49 @@ export default function ReportSheet({ issue }: { issue: IssueRow }) {
             over a named analyst&apos;s signature. No such product accompanies this issue.
           </div>
 
-          {/* map */}
-          <div className="relative h-[540px] mt-5 border border-black/25 print:h-[460px]">
-            <TheaterMap events={plottable} selectedId={null} onSelect={() => {}} />
+          {/* map — full width of the sheet, proof-build style */}
+          <div className="report-map relative w-full h-[540px] mt-5 border border-black/25 print:h-[520px]">
+            <TheaterMap events={plottable} selectedId={null} onSelect={() => {}} forExport />
           </div>
-          <p className="font-mono text-[9px] text-black/50 mt-1.5 leading-relaxed">
-            (U) Numbered points are events, chronological within the issue window; closely co-located
-            symbols are slightly displaced for legibility. Positions derive from place names
-            validated against a gazetteer; region-level reports carry dashed frames; events
-            below the geolocation confidence threshold are listed without a plotted point.
-            Symbols are MIL-STD-2525E affiliation frames carrying the event serial — the
-            Activities symbol set defines no icons for conventional operations.
-          </p>
+
+          {/* legend + methodology, proof-build footer row under the map */}
+          <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-4 mt-2 border-t border-black/15 pt-2.5">
+            <div>
+              <h4 className="font-mono text-[10px] tracking-widest text-black/60">LEGEND</h4>
+              <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1">
+                {(
+                  [
+                    ["#a02c2c", "Hostile action"],
+                    ["#1f4e79", "Friendly / US action"],
+                    ["#1a7f37", "Neutral / third party"],
+                    ["#b08800", "Unknown / contested"],
+                  ] as const
+                ).map(([c, label]) => (
+                  <div key={label} className="flex items-center gap-2">
+                    <span
+                      className="inline-block w-3 h-3 rotate-45 shrink-0"
+                      style={{ backgroundColor: c, border: "1.5px solid rgba(10,14,18,0.85)" }}
+                    />
+                    <span className="text-[10px] leading-tight">{label}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="font-mono text-[9px] text-black/45 mt-1.5 leading-snug">
+                Symbols are MIL-STD-2525E affiliation frames carrying the event serial — the
+                Activities symbol set defines no icons for conventional operations.
+              </p>
+            </div>
+            <div>
+              <h4 className="font-mono text-[10px] tracking-widest text-black/60">(U) METHODOLOGY</h4>
+              <p className="font-mono text-[9px] text-black/55 mt-1.5 leading-relaxed">
+                Numbered points are events, chronological within the issue window; closely
+                co-located symbols are slightly displaced for legibility, with true positions kept
+                in the data. Positions derive from place names validated against a curated
+                gazetteer; region-level reports carry dashed frames; events below the geolocation
+                confidence threshold are listed below without a plotted point.
+              </p>
+            </div>
+          </div>
 
           {/* event callouts, proof-build style */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-5">

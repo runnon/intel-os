@@ -55,3 +55,36 @@ body {
   border-color: #171712;
   color: #171712;
 }
+
+/* ---------------------------------------------------------------------------
+   Export / print (UX-5): the sheet is a landscape GEOINT product like the
+   OS-IRN-26-001 proof build. Force landscape paper, edge-to-edge, and let the
+   report body use the full page width so the map spans the same width as the
+   rest of the sheet.
+   --------------------------------------------------------------------------- */
+@media print {
+  @page {
+    size: landscape;
+    margin: 8mm;
+  }
+  html,
+  body {
+    background: #ffffff;
+  }
+  /* The report sheet fills the page width in print (no centered max-width). */
+  .report-sheet {
+    max-width: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border: 0 !important;
+  }
+  /* Keep the WebGL map crisp and force full width across the printed sheet. */
+  .report-map {
+    width: 100% !important;
+  }
+  .maplibregl-ctrl-top-left,
+  .maplibregl-ctrl-bottom-right {
+    display: none !important; /* zoom + attribution buttons are noise on paper */
+  }
+}

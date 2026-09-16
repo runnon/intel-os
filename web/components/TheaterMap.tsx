@@ -22,6 +22,9 @@ interface Props {
   events: NumberedEvent[]; // pre-filtered, all with lat/lon
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  // Report/export map: keep the WebGL frame so window.print() captures the map
+  // (a default MapLibre canvas prints blank) and re-fit/redraw around printing.
+  forExport?: boolean;
 }
 
 /**
@@ -69,7 +72,7 @@ function toGeoJSON(events: NumberedEvent[]): GeoJSON.FeatureCollection {
   };
 }
 
-export default function TheaterMap({ events, selectedId, onSelect }: Props) {
+export default function TheaterMap({ events, selectedId, onSelect, forExport = false }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const readyRef = useRef(false);
@@ -83,12 +86,21 @@ export default function TheaterMap({ events, selectedId, onSelect }: Props) {
       style: STYLE_URL,
       center: [47, 26],
       zoom: 4,
+      // Without this the map's WebGL buffer is cleared after each frame, so
+      // window.print() / html-to-image captures a blank canvas (UX-5 export).
+      // maplibre-gl v5 nests it under canvasContextAttributes.
+      canvasContextAttributes: { preserveDrawingBuffer: forExport },
     });
     mapRef.current = map;
     (window as unknown as { __theaterMap?: maplibregl.Map }).__theaterMap = map;
     map.on("error", (e: maplibregl.ErrorEvent) => console.error("[theater-map]", e.error?.message ?? e));
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-left");
     map.addControl(new maplibregl.ScaleControl({ unit: "metric" }));
+
+    // Keep the canvas matched to its container (covers a container that gets its
+    // size after mount, and the print reflow) so the map always fills its width.
+    const ro = new ResizeObserver(() => map.resize());
+    if (container.current) ro.observe(container.current);
 
     map.on("style.load", () => {
       recolorToPrint(map);
@@ -159,7 +171,28 @@ export default function TheaterMap({ events, selectedId, onSelect }: Props) {
       syncData(map, eventsRef.current);
     });
 
+    // Print path: the sheet reflows to the page width, so resize the canvas and
+    // re-fit the events to it just before the browser snapshots for the PDF.
+    const onBeforePrint = () => {
+      if (!readyRef.current) return;
+      map.resize();
+      fitToEvents(map, eventsRef.current, false); // instant so the frame is ready to snapshot
+      map.triggerRepaint();
+    };
+    const onAfterPrint = () => {
+      if (readyRef.current) map.resize();
+    };
+    if (forExport) {
+      window.addEventListener("beforeprint", onBeforePrint);
+      window.addEventListener("afterprint", onAfterPrint);
+    }
+
     return () => {
+      if (forExport) {
+        window.removeEventListener("beforeprint", onBeforePrint);
+        window.removeEventListener("afterprint", onAfterPrint);
+      }
+      ro.disconnect();
       map.remove();
       mapRef.current = null;
       readyRef.current = false;
@@ -219,13 +252,18 @@ function syncData(map: maplibregl.Map, events: NumberedEvent[]) {
     const src = map.getSource("events") as maplibregl.GeoJSONSource | undefined;
     src?.setData(toGeoJSON(events));
     // Fit once on first data; afterwards the analyst's pan/zoom is theirs.
-    if (events.length > 0 && !fittedMaps.has(map)) {
-      fittedMaps.add(map);
-      const b = new maplibregl.LngLatBounds();
-      for (const e of events) b.extend([e.lon!, e.lat!]);
-      map.fitBounds(b, { padding: 80, maxZoom: 7, duration: 500 });
-    }
+    if (events.length > 0 && !fittedMaps.has(map)) fitToEvents(map, events, false);
   });
+}
+
+/** Frame the map to contain all plotted events. Used on first data load and,
+ *  for the export map, again at print time once the canvas is page-sized. */
+function fitToEvents(map: maplibregl.Map, events: NumberedEvent[], animate: boolean) {
+  if (events.length === 0) return;
+  fittedMaps.add(map);
+  const b = new maplibregl.LngLatBounds();
+  for (const e of events) b.extend([e.lon!, e.lat!]);
+  map.fitBounds(b, { padding: 80, maxZoom: 7, duration: animate ? 500 : 0 });
 }
 
 /**
