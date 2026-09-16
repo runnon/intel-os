@@ -1,96 +1,104 @@
 "use client";
 
-import type { TheaterEvent } from "@intel-os/core";
+import type { NumberedEvent } from "./TheaterMap";
 import { zulu } from "./TheaterView";
 
-// Event detail (spec §3): reported fact, impact on friendly operations,
-// affiliation basis, and the source — on one panel. DATA-1: every source is a
-// resolvable link. DATA-5: origin and actor confidence shown separately.
-export default function EventDetail({ event, onClose }: { event: TheaterEvent; onClose: () => void }) {
+// Selection callout (spec §3 event detail): reported fact, US impact,
+// confidence split (DATA-5), and resolvable sources (DATA-1) — rendered as a
+// proof-build callout card docked over the map, with prev/next stepping.
+export default function EventCallout({
+  event,
+  color,
+  onClose,
+  onPrev,
+  onNext,
+}: {
+  event: NumberedEvent;
+  color: string;
+  onClose: () => void;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
   return (
-    <div className="border-t border-black/15 bg-[#fafafc] p-4 max-h-[50%] overflow-y-auto shrink-0">
-      <div className="flex items-start justify-between gap-3">
-        <h3 className="headline text-lg text-[#0b0b3b]">{event.title}</h3>
-        <button onClick={onClose} className="font-mono text-xs text-black/55 hover:text-[#000057] shrink-0">
+    <div
+      className="absolute top-3 left-3 z-20 w-[360px] max-w-[calc(100%-24px)] max-h-[calc(100%-70px)] overflow-y-auto bg-[#f5f2ea] border border-[#171712] shadow-xl"
+      style={{ borderLeftWidth: 5, borderLeftColor: color }}
+    >
+      {/* header */}
+      <div className="flex items-start gap-3 px-4 pt-3">
+        <span
+          className="shrink-0 w-6 h-6 mt-0.5 rotate-45 border flex items-center justify-center"
+          style={{ backgroundColor: color, borderColor: "#171712" }}
+        >
+          <span className="-rotate-45 font-mono text-[10px] font-bold text-[#f5f2ea]">{event.num}</span>
+        </span>
+        <div className="min-w-0 flex-1">
+          <h3 className="headline text-base leading-tight">{event.placeName}</h3>
+          <p className="font-mono text-[9px] text-[#6b675c] mt-0.5">
+            {(event.country ?? "—").toUpperCase()} · {zulu(event.occurredAt)} · {event.category.toUpperCase()} ·{" "}
+            <span style={{ color }}>{event.affiliation.toUpperCase()}</span>
+          </p>
+        </div>
+        <button onClick={onClose} className="font-mono text-sm text-[#6b675c] hover:text-[#171712] shrink-0 px-1">
           ✕
         </button>
       </div>
-      <div className="font-mono text-[10px] text-black/55 mt-1 flex flex-wrap gap-x-3">
-        <span>{zulu(event.occurredAt)}</span>
-        <span>
-          {event.placeName.toUpperCase()}
-          {event.country ? `, ${event.country.toUpperCase()}` : ""}
-        </span>
-        <span className="uppercase">{event.category}</span>
-        <span className="uppercase text-black/55">{event.affiliation}</span>
-      </div>
 
-      <p className="text-xs text-[#0b0b3b] mt-3 leading-relaxed">{event.summary}</p>
+      <div className="px-4 pb-3">
+        <p className="font-sans text-[13px] font-medium leading-snug mt-2">{event.title}</p>
+        <p className="text-xs text-[#3a382e] mt-1.5 leading-relaxed">{event.summary}</p>
 
-      {event.usImpact && (
-        <div className="mt-3">
-          <div className="font-mono text-[10px] tracking-widest text-[#8a6100]">US IMPACT</div>
-          <p className="text-xs text-[#0b0b3b] mt-1 leading-relaxed">{event.usImpact}</p>
-        </div>
-      )}
+        {event.usImpact && (
+          <div className="mt-2.5 border-t border-[#dcd6c4] pt-2">
+            <span className="font-mono text-[9px] tracking-widest text-[#a02c2c]">US IMPACT </span>
+            <span className="text-[11px] leading-snug">{event.usImpact}</span>
+          </div>
+        )}
 
-      <div className="mt-3 grid grid-cols-2 gap-2 font-mono text-[10px]">
-        <div className="border border-black/15 rounded-md px-2.5 py-2">
-          <div className="text-black/40">CONFIDENCE · ORIGIN</div>
-          <div className="text-[#0b0b3b] uppercase">{event.confOrigin}</div>
-        </div>
-        <div className="border border-black/15 rounded-md px-2.5 py-2">
-          <div className="text-black/40">CONFIDENCE · ACTOR</div>
-          <div className="text-[#0b0b3b] uppercase">{event.confActor}</div>
-        </div>
-        <div className="border border-black/15 rounded-md px-2.5 py-2">
-          <div className="text-black/40">POSITION</div>
-          <div className="text-[#0b0b3b] uppercase">
-            {event.lat != null ? `${event.precision} · gazetteer-validated` : "withheld — low geolocation confidence"}
+        <div className="mt-2.5 grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-[9px] border-t border-[#dcd6c4] pt-2">
+          <div>
+            <span className="text-[#918c7d]">CONF·ORIGIN </span>
+            <span className="uppercase">{event.confOrigin}</span>
+          </div>
+          <div>
+            <span className="text-[#918c7d]">CONF·ACTOR </span>
+            <span className="uppercase">{event.confActor}</span>
+          </div>
+          <div className="col-span-2">
+            <span className="text-[#918c7d]">POSITION </span>
+            <span className="uppercase">
+              {event.lat != null ? `${event.precision} · gazetteer-validated` : "withheld — low confidence"}
+            </span>
           </div>
         </div>
-        <div className="border border-black/15 rounded-md px-2.5 py-2">
-          <div className="text-black/40">US FORCES</div>
-          <div className="text-[#0b0b3b]">{event.usForcesFlag ? "AFFECTED / THREATENED" : "NOT DIRECTLY AFFECTED"}</div>
-        </div>
-      </div>
 
-      <div className="mt-3">
-        <div className="font-mono text-[10px] tracking-widest text-black/40">
-          SOURCES ({event.sources.length})
-          {event.sources.length <= 1 && (
-            <span className="text-[#8a6100] ml-2">SINGLE SOURCE — NOT CONFIRMED</span>
-          )}
-        </div>
-        <ul className="mt-1 space-y-1">
-          {event.sources.map((s) => (
-            <li key={s.url} className="text-xs">
-              <a
-                href={s.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[#0b0b3b] hover:underline break-all"
-              >
-                {s.outlet}
-                {s.title ? ` — ${s.title}` : ""}
-              </a>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      {event.revisions.length > 0 && (
-        <div className="mt-3">
-          <div className="font-mono text-[10px] tracking-widest text-black/40">REVISIONS</div>
-          <ul className="mt-1 space-y-0.5 font-mono text-[10px] text-black/55">
-            {event.revisions.map((r, i) => (
-              <li key={i}>
-                {zulu(r.at)} · {r.field}: “{r.prior}” → “{r.current}”
+        <div className="mt-2.5 border-t border-[#dcd6c4] pt-2">
+          <div className="font-mono text-[9px] tracking-widest text-[#918c7d]">
+            SOURCES ({event.sources.length})
+            {event.sources.length <= 1 && <span className="text-[#8a6100]"> · SINGLE SOURCE — NOT CONFIRMED</span>}
+          </div>
+          <ul className="mt-1 space-y-0.5">
+            {event.sources.map((s) => (
+              <li key={s.url} className="text-[11px] truncate">
+                <a href={s.url} target="_blank" rel="noopener noreferrer" className="text-[#1f4e79] hover:underline">
+                  {s.outlet}
+                  {s.title ? ` — ${s.title}` : ""}
+                </a>
               </li>
             ))}
           </ul>
         </div>
-      )}
+      </div>
+
+      {/* prev / next stepping */}
+      <div className="flex border-t border-[#171712] font-mono text-[10px]">
+        <button onClick={onPrev} className="flex-1 py-1.5 hover:bg-[#eae4d2] border-r border-[#dcd6c4]">
+          ◂ PREV EVENT
+        </button>
+        <button onClick={onNext} className="flex-1 py-1.5 hover:bg-[#eae4d2]">
+          NEXT EVENT ▸
+        </button>
+      </div>
     </div>
   );
 }

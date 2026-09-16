@@ -91,6 +91,19 @@ export default function TheaterMap({ events, selectedId, onSelect }: Props) {
     map.addControl(new maplibregl.ScaleControl({ unit: "metric" }));
 
     map.on("style.load", () => {
+      recolorToPrint(map);
+      map.addSource("selected", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      map.addLayer({
+        id: "selected-ring",
+        type: "circle",
+        source: "selected",
+        paint: {
+          "circle-radius": 22,
+          "circle-color": "rgba(23,23,18,0.08)",
+          "circle-stroke-color": "#171712",
+          "circle-stroke-width": 2,
+        },
+      });
       map.addSource("events", {
         type: "geojson",
         data: toGeoJSON(eventsRef.current),
@@ -106,15 +119,15 @@ export default function TheaterMap({ events, selectedId, onSelect }: Props) {
           "icon-image": ["get", "sidc"],
           "icon-size": 1,
           "icon-allow-overlap": true,
-          "text-field": ["get", "place"],
+          "text-field": ["step", ["zoom"], "", 5.2, ["get", "place"]],
           "text-size": 10,
           "text-offset": [0, 1.8],
           "text-optional": true,
           "text-font": LABEL_FONT,
         },
         paint: {
-          "text-color": "#0b0b3b",
-          "text-halo-color": "#ffffff",
+          "text-color": "#171712",
+          "text-halo-color": "#f5f2ea",
           "text-halo-width": 1.2, // GEO-5: halo keeps labels legible over linework
         },
       });
@@ -131,8 +144,8 @@ export default function TheaterMap({ events, selectedId, onSelect }: Props) {
           "text-font": LABEL_FONT,
         },
         paint: {
-          "text-color": "#000057",
-          "text-halo-color": "#ffffff",
+          "text-color": "#171712",
+          "text-halo-color": "#f5f2ea",
           "text-halo-width": 1.6,
         },
       });
@@ -163,13 +176,18 @@ export default function TheaterMap({ events, selectedId, onSelect }: Props) {
     syncData(map, events);
   }, [events]);
 
-  // fly to selection
+  // fly to selection + highlight ring
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !selectedId) return;
-    const ev = events.find((e) => e.id === selectedId);
+    if (!map || !readyRef.current) return;
+    const ev = selectedId ? events.find((e) => e.id === selectedId) : null;
+    const src = map.getSource("selected") as maplibregl.GeoJSONSource | undefined;
     if (ev && ev.lat != null && ev.lon != null) {
-      map.easeTo({ center: [ev.lon, ev.lat], zoom: Math.max(map.getZoom(), 6.5), duration: 600 });
+      const pos = displaced(events).get(ev.id)!;
+      src?.setData({ type: "FeatureCollection", features: [{ type: "Feature", geometry: { type: "Point", coordinates: pos }, properties: {} }] });
+      map.easeTo({ center: pos, zoom: Math.max(map.getZoom(), 5.6), duration: 500, padding: { left: 380 } });
+    } else {
+      src?.setData({ type: "FeatureCollection", features: [] });
     }
   }, [selectedId, events]);
 
@@ -210,6 +228,44 @@ function syncData(map: maplibregl.Map, events: NumberedEvent[]) {
       map.fitBounds(b, { padding: 80, maxZoom: 7, duration: 500 });
     }
   });
+}
+
+/**
+ * Recolor the open basemap to the proof-build print palette: cream land, tan
+ * terrain, slate-blue water, muted ink linework. Pure client-side paint edits
+ * on OpenFreeMap tiles — no new network dependency (NFR-4/5 intact).
+ */
+function recolorToPrint(map: maplibregl.Map) {
+  const style = map.getStyle();
+  if (!style?.layers) return;
+  for (const layer of style.layers) {
+    const id = layer.id;
+    try {
+      if (layer.type === "background") {
+        map.setPaintProperty(id, "background-color", "#ede7d5");
+      } else if (layer.type === "fill") {
+        if (/water|ocean|river|lake/i.test(id)) {
+          map.setPaintProperty(id, "fill-color", "#c7d4d8");
+        } else if (/landcover|park|wood|grass|vegetation/i.test(id)) {
+          map.setPaintProperty(id, "fill-color", "#e4dec7");
+        } else if (/landuse|residential|building/i.test(id)) {
+          map.setPaintProperty(id, "fill-color", "#e8e1cd");
+        } else {
+          map.setPaintProperty(id, "fill-color", "#ece5d2");
+        }
+        map.setPaintProperty(id, "fill-outline-color", "rgba(23,23,18,0.06)");
+      } else if (layer.type === "line") {
+        if (/water|river/i.test(id)) map.setPaintProperty(id, "line-color", "#b3c3c9");
+        else if (/boundary|admin/i.test(id)) map.setPaintProperty(id, "line-color", "#8f8a76");
+        else map.setPaintProperty(id, "line-color", "#d6cfb8");
+      } else if (layer.type === "symbol") {
+        map.setPaintProperty(id, "text-color", "#5c584a");
+        map.setPaintProperty(id, "text-halo-color", "#f0ebdc");
+      }
+    } catch {
+      // some layers reject some properties — skip them
+    }
+  }
 }
 
 const fittedMaps = new WeakSet<maplibregl.Map>();

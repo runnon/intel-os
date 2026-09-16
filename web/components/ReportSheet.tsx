@@ -37,7 +37,7 @@ export default function ReportSheet({ issue }: { issue: IssueRow }) {
     <div className="flex-1 overflow-y-auto bg-[#e9e6dc] text-[#171712] print:bg-white">
       <div className="max-w-6xl mx-auto my-6 print:my-0 bg-[#f5f2ea] shadow-lg print:shadow-none border border-black/10">
         {/* sheet banner (MARK-1: marking on the sheet itself) */}
-        <div className="bg-[#000057] text-[#f2f2f2] text-center text-[10px] tracking-[0.3em] font-mono py-1">
+        <div className="bg-[#1f4a2e] text-[#dcead9] text-center text-[10px] tracking-[0.3em] font-mono py-1">
           UNCLASSIFIED · OPEN SOURCES ONLY · NOT AN OFFICIAL GOVERNMENT PRODUCT
         </div>
 
@@ -154,7 +154,7 @@ export default function ReportSheet({ issue }: { issue: IssueRow }) {
           </p>
         </div>
 
-        <div className="bg-[#000057] text-[#f2f2f2] text-center text-[10px] tracking-[0.3em] font-mono py-1">
+        <div className="bg-[#1f4a2e] text-[#dcead9] text-center text-[10px] tracking-[0.3em] font-mono py-1">
           UNCLASSIFIED · OPEN SOURCES ONLY · NOT AN OFFICIAL GOVERNMENT PRODUCT
         </div>
       </div>
@@ -163,13 +163,13 @@ export default function ReportSheet({ issue }: { issue: IssueRow }) {
       <div className="max-w-6xl mx-auto pb-8 flex gap-3 print:hidden px-2">
         <button
           onClick={() => window.print()}
-          className="font-mono text-xs px-4 py-2 rounded-md bg-[#000057] text-white hover:bg-[#1a1a7a]"
+          className="font-mono text-xs px-4 py-2 rounded-md bg-[#171712] text-[#f5f2ea] hover:bg-[#3a382e]"
         >
           EXPORT PDF (PRINT)
         </button>
         <a
           href={`/t/${issue.aor.toLowerCase()}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`}
-          className="font-mono text-xs px-4 py-2 rounded-md border border-[#000057] text-[#000057] hover:bg-black/5"
+          className="font-mono text-xs px-4 py-2 rounded-md border border-[#171712] text-[#171712] hover:bg-black/5"
         >
           BACK TO LIVE PICTURE
         </a>

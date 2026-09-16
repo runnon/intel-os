@@ -1,9 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #0b0b3b;
-  --accent-gold: #e3b341;
+  --background: #e9e5d6;   /* desk */
+  --paper: #f5f2ea;        /* sheet */
+  --foreground: #171712;   /* ink */
+  --muted: #6b675c;
+  --faint: #918c7d;
+  --rule: #d8d2c0;
+  --hostile: #a02c2c;
+  --friendly: #1f4e79;
+  --gold: #8a6100;
+  --banner: #1f4a2e;
 }
 
 @theme inline {
@@ -20,19 +27,20 @@ body {
   font-size: 14px;
 }
 
-/* Display voice: condensed gothic, Nous-portal style */
+/* Display voice: condensed gothic, print-sheet style */
 .headline {
   font-family: var(--font-display), sans-serif;
   font-weight: 500;
-  letter-spacing: 0.01em;
-  line-height: 1.1;
+  letter-spacing: 0.02em;
+  line-height: 1.08;
+  text-transform: uppercase;
 }
 
-/* Section tag: white chip, dark text, uppercase (EXPLORE / RESOURCES style) */
+/* Section tag: ink block, paper text */
 .tag {
   display: inline-block;
-  background: #000057;
-  color: #ffffff;
+  background: #171712;
+  color: #f5f2ea;
   font-family: var(--font-ui), sans-serif;
   font-size: 11px;
   font-weight: 600;

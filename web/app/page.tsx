@@ -28,33 +28,33 @@ function Tile({ aor, label, region, issue }: { aor: Aor; label: string; region: 
   const live = Boolean(issue);
   const inner = (
     <div
-      className={`border rounded-md p-4 h-40 flex flex-col justify-between transition-colors ${
+      className={`border p-4 h-40 flex flex-col justify-between transition-colors ${
         live
-          ? "border-black/15 bg-transparent hover:border-black/40 cursor-pointer"
-          : "border-black/15 bg-white opacity-60"
+          ? "border-[#c9c2ac] bg-transparent hover:border-[#8f8a7c] cursor-pointer"
+          : "border-[#c9c2ac] bg-[#f5f2ea] opacity-60"
       }`}
     >
       <div>
         <div className="flex items-baseline justify-between">
-          <h2 className="headline text-2xl text-[#0b0b3b]">{label}</h2>
+          <h2 className="headline text-2xl text-[#171712]">{label}</h2>
           {live ? (
             <span className="text-xs font-medium text-[#8a6100] border border-[#8a6100]/50 bg-[#e3b341]/15 rounded-full px-2 py-0.5">Live</span>
           ) : (
-            <span className="text-xs font-medium text-black/40 border border-black/15 rounded-full px-2 py-0.5">No coverage</span>
+            <span className="text-xs font-medium text-[#918c7d] border border-[#c9c2ac] rounded-full px-2 py-0.5">No coverage</span>
           )}
         </div>
-        <p className="text-xs text-black/55 mt-1.5">{region}</p>
+        <p className="text-xs text-[#6b675c] mt-1.5">{region}</p>
       </div>
       {issue ? (
-        <div className="font-mono text-xs text-black/55 space-y-1">
+        <div className="font-mono text-xs text-[#6b675c] space-y-1">
           <div>
             {issue.tempo.totalEvents} events · {issue.tempo.newSinceLastIssue} new · issue{" "}
             {String(issue.issue_number).padStart(3, "0")}
           </div>
-          <div className="text-black/40">CUT-OFF {zulu(issue.info_cutoff)} · events only, no assessment layer</div>
+          <div className="text-[#918c7d]">CUT-OFF {zulu(issue.info_cutoff)} · events only, no assessment layer</div>
         </div>
       ) : (
-        <div className="font-mono text-xs text-black/40">
+        <div className="font-mono text-xs text-[#918c7d]">
           No published issues. This command has no ingest coverage yet — that is stated, not hidden.
         </div>
       )}
@@ -79,12 +79,12 @@ export default async function Home() {
         <header className="mb-8">
           <p className="mb-3"><span className="tag">Unclassified Theater Awareness</span></p>
           <div className="flex items-end justify-between flex-wrap gap-3">
-            <h1 className="headline text-5xl text-[#0b0b3b]">Theater Picture</h1>
-            <a href="/analyst" className="font-mono text-xs px-3 py-1.5 rounded-md border border-[#000057] text-[#000057] hover:bg-black/5">
+            <h1 className="headline text-5xl text-[#171712]">Theater Picture</h1>
+            <a href="/analyst" className="font-mono text-xs px-3 py-1.5 rounded-md border border-[#171712] text-[#171712] hover:bg-[#eae4d2]">
               ANALYST DRAFTING →
             </a>
           </div>
-          <p className="text-sm leading-relaxed text-black/55 mt-2 max-w-2xl">
+          <p className="text-sm leading-relaxed text-[#6b675c] mt-2 max-w-2xl">
             Pick a combatant command for a live, filterable geospatial picture of that theater,
             built entirely from publicly available information on an unattended 12-hour cycle.
             Situation updates carry reported facts only — an assessment layer publishes solely
