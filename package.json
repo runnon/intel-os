@@ -1,0 +1,14 @@
+{
+  "name": "intel-os",
+  "private": true,
+  "workspaces": [
+    "web",
+    "worker",
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "start": "npm start -w worker"
+  }
+}

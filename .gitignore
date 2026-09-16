@@ -1,0 +1,15 @@
+node_modules/
+.next/
+dist/
+.env
+.env.*
+!.env.example
+.DS_Store
+*.tsbuildinfo
+.vercel
+
+# Personal product documents — not for public distribution (see spec RISK-7)
+Iran_Theater_Picture_ANSI-D_3.pdf
+Theater_Picture_Product_Spec_v0.1.pdf
+# Internal market/compliance research — keep out of the public repo
+research/
