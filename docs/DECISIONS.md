@@ -88,3 +88,20 @@ services, NIPRNet-compatible. Cadence stays `0 */12 * * *` (user confirmed the
 12-hour cycle). Feed catalog additions verified live: every outlet resolved on
 first smoke test except Defense One (fast-xml-parser entity-expansion limit —
 fixed by disabling entity processing and decoding common entities manually).
+
+## 2026-09-16 — Ingest scheduler moved to GitHub Actions (Railway cron unreliable)
+
+Investigation (prompted by "is the 12h cron running?") found Railway's
+`deploy.cronSchedule` was NOT firing: across a 14-hour window spanning the
+12:00 UTC slot, zero issues were published — every sweep to date was triggered
+by a `railway up`/redeploy, never by the schedule. The active deployment's
+serviceManifest showed `cronSchedule: null` despite railway.json setting it, so
+Railway's config-as-code cron never registered on the service.
+
+Fix: `.github/workflows/ingest-cron.yml` runs every 12h (00:17 / 12:17 UTC) and
+`railway redeploy --service worker`, which re-runs the one-shot worker (all six
+AORs). GitHub Actions cron is durable and needs no Claude session. Requires one
+repo secret: RAILWAY_TOKEN (project token, intel-os production). The railway.json
+cronSchedule is left in place as a harmless backup (dedup makes any double-run a
+no-op). A session-scoped Claude check (twice daily) independently verifies issue
+freshness and redeploys if stale, until the GitHub Action is confirmed firing.
