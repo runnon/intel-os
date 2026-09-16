@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { makeModel } from "@/lib/model";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -36,9 +36,13 @@ interface ChatMessage {
 }
 
 export async function POST(req: Request) {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  const configured =
+    process.env.MODEL_BACKEND === "anthropic"
+      ? Boolean(process.env.ANTHROPIC_API_KEY)
+      : Boolean(process.env.BEDROCK_AWS_ACCESS_KEY_ID ?? process.env.AWS_ACCESS_KEY_ID);
+  if (!configured) {
     return NextResponse.json(
-      { error: "Analyst drafting is not configured yet (ANTHROPIC_API_KEY missing on the server)." },
+      { error: "Analyst drafting is not configured yet (no model backend credentials on the server)." },
       { status: 503 },
     );
   }
@@ -79,9 +83,9 @@ export async function POST(req: Request) {
 
   const covered = latest.map((i) => i.aor).join(", ") || "none";
 
-  const anthropic = new Anthropic();
+  const { client: anthropic, model } = makeModel();
   const response = await anthropic.messages.create({
-    model: "claude-opus-4-8",
+    model,
     max_tokens: 4000,
     system: SYSTEM,
     messages: [

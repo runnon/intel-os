@@ -83,6 +83,17 @@ text, white/20 borders on transparent cards, gold `#e3b341` accents, Oswald
 for UI text, monospace for data/timestamps (Zulu format). Affiliation colors are
 MIL-STD-2525 semantics — never restyle them. Marking banners stay green.
 
+## Model backend
+
+Extraction and analyst drafting run on **Amazon Bedrock** by default (AWS credits):
+`MODEL_BACKEND=bedrock`, model `us.anthropic.claude-sonnet-4-6` via the classic
+Bedrock runtime (`AnthropicBedrock` client). This account is NOT entitled to
+Opus 4.7/4.8 or Sonnet 5 on Bedrock, nor to the Mantle surface — do not "upgrade"
+the model ID without testing entitlement first (`worker/src/model.ts` is the one
+place backends/models are configured; web mirrors it in `web/lib/model.ts`).
+Vercel reserves AWS_* env names, so the web side uses BEDROCK_AWS_*.
+`MODEL_BACKEND=anthropic` + ANTHROPIC_API_KEY switches to the Claude API direct.
+
 ## Housekeeping
 
 - Record consequential decisions in `docs/DECISIONS.md` (what changed, why, and the

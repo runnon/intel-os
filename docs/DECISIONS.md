@@ -54,3 +54,15 @@ docs/symbology/README.md for the distilled rendering rules and the event→SIDC 
 - UI restyled to the Nous-portal-inspired system (navy #000057, Oswald display,
   Space Grotesk UI, gold accents) — third and final restyle; tokens documented in
   AGENTS.md §Style.
+
+## 2026-09-15 — Model backend: Amazon Bedrock (AWS credits)
+
+Extraction + analyst chat run Claude on Amazon Bedrock using the existing AWS
+account (IAM user BedrockAPIKey-sfie, us-east-1) instead of a direct Anthropic
+API key — burns AWS credits. Entitlement tested empirically: Sonnet 4.6 and
+Opus 4.5 invocable via classic runtime inference profiles; Opus 4.7/4.8 and
+Mantle surface denied. Selected `us.anthropic.claude-sonnet-4-6` (newest
+entitled generation; structured outputs verified working). Backend switch lives
+in worker/src/model.ts + web/lib/model.ts. First live ingest published
+SU-CEN-26-003: 53 articles → 12 events, attribution discipline and unplotted-
+below-threshold behavior confirmed on real data.

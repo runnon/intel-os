@@ -1,4 +1,6 @@
-import Anthropic from '@anthropic-ai/sdk';
+import type Anthropic from '@anthropic-ai/sdk';
+import type { AnthropicBedrock } from '@anthropic-ai/bedrock-sdk';
+import { makeModel } from './model';
 import { randomUUID } from 'node:crypto';
 import type { Aor, TheaterEvent } from '@intel-os/core';
 import { geolocate } from '@intel-os/core';
@@ -60,8 +62,8 @@ Rules:
 - Confidence reflects sourcing: named officials/multiple outlets = high; single credible outlet = moderate; belligerent state media only = low.
 - occurredAt: use the reported event time; if only the publication date is known, use that.`;
 
-export function makeClaudeExtractor(client?: Anthropic): ExtractorFn {
-  const anthropic = client ?? new Anthropic();
+export function makeClaudeExtractor(override?: { client: Anthropic | AnthropicBedrock; model: string }): ExtractorFn {
+  const { client: anthropic, model } = override ?? makeModel();
   return async (articles, aor) => {
     if (articles.length === 0) return [];
     const batch = articles.slice(0, 80).map((a, i) =>
@@ -69,7 +71,7 @@ export function makeClaudeExtractor(client?: Anthropic): ExtractorFn {
     ).join('\n');
 
     const response = await anthropic.messages.create({
-      model: 'claude-opus-4-8',
+      model,
       max_tokens: 16000,
       system: SYSTEM,
       output_config: { format: { type: 'json_schema', schema: EVENT_SCHEMA } },
