@@ -78,7 +78,12 @@ export default async function Home() {
       <div className="max-w-5xl mx-auto px-6 py-10">
         <header className="mb-8">
           <p className="mb-3"><span className="tag">Unclassified Theater Awareness</span></p>
-          <h1 className="headline text-5xl text-[#0b0b3b]">Theater Picture</h1>
+          <div className="flex items-end justify-between flex-wrap gap-3">
+            <h1 className="headline text-5xl text-[#0b0b3b]">Theater Picture</h1>
+            <a href="/analyst" className="font-mono text-xs px-3 py-1.5 rounded-md border border-[#000057] text-[#000057] hover:bg-black/5">
+              ANALYST DRAFTING →
+            </a>
+          </div>
           <p className="text-sm leading-relaxed text-black/55 mt-2 max-w-2xl">
             Pick a combatant command for a live, filterable geospatial picture of that theater,
             built entirely from publicly available information on an unattended 12-hour cycle.

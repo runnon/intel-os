@@ -14,21 +14,54 @@ const STYLE_URL =
   process.env.NEXT_PUBLIC_BASEMAP_STYLE_URL ?? "https://tiles.openfreemap.org/styles/positron";
 const LABEL_FONT = ["Noto Sans Regular"];
 
+export interface NumberedEvent extends TheaterEvent {
+  num: number; // chronological serial within the issue (proof-build style)
+}
+
 interface Props {
-  events: TheaterEvent[]; // pre-filtered, all with lat/lon
+  events: NumberedEvent[]; // pre-filtered, all with lat/lon
   selectedId: string | null;
   onSelect: (id: string | null) => void;
 }
 
-function toGeoJSON(events: TheaterEvent[]): GeoJSON.FeatureCollection {
+/**
+ * Display positions: symbols in tight groups (e.g. the Bahrain cluster) are
+ * displaced in a small ring for legibility — the proof build does the same and
+ * the practice is disclosed in the footer. True positions stay in the data.
+ */
+function displaced(events: NumberedEvent[]): Map<string, [number, number]> {
+  const groups = new Map<string, NumberedEvent[]>();
+  for (const e of events) {
+    const key = `${Math.round(e.lat! / 0.35)}:${Math.round(e.lon! / 0.35)}`;
+    (groups.get(key) ?? groups.set(key, []).get(key)!).push(e);
+  }
+  const out = new Map<string, [number, number]>();
+  for (const group of groups.values()) {
+    if (group.length === 1) {
+      out.set(group[0].id, [group[0].lon!, group[0].lat!]);
+      continue;
+    }
+    const cx = group.reduce((a, e) => a + e.lon!, 0) / group.length;
+    const cy = group.reduce((a, e) => a + e.lat!, 0) / group.length;
+    group.forEach((e, i) => {
+      const angle = (2 * Math.PI * i) / group.length - Math.PI / 2;
+      out.set(e.id, [cx + 0.28 * Math.cos(angle), cy + 0.22 * Math.sin(angle)]);
+    });
+  }
+  return out;
+}
+
+function toGeoJSON(events: NumberedEvent[]): GeoJSON.FeatureCollection {
+  const pos = displaced(events);
   return {
     type: "FeatureCollection",
     features: events.map((e) => ({
       type: "Feature",
-      geometry: { type: "Point", coordinates: [e.lon!, e.lat!] },
+      geometry: { type: "Point", coordinates: pos.get(e.id)! },
       properties: {
         id: e.id,
         sidc: symbolFor(e).sidc,
+        num: String(e.num),
         title: e.title,
         place: e.placeName,
       },
@@ -61,42 +94,14 @@ export default function TheaterMap({ events, selectedId, onSelect }: Props) {
       map.addSource("events", {
         type: "geojson",
         data: toGeoJSON(eventsRef.current),
-        cluster: true,
-        clusterMaxZoom: 7,
-        clusterRadius: 42,
       });
 
-      // UX-5: cluster at low zoom…
-      map.addLayer({
-        id: "clusters",
-        type: "circle",
-        source: "events",
-        filter: ["has", "point_count"],
-        paint: {
-          "circle-color": "#ffffff",
-          "circle-stroke-color": "rgba(0,0,87,0.55)",
-          "circle-stroke-width": 1.5,
-          "circle-radius": ["step", ["get", "point_count"], 14, 5, 18, 15, 24],
-        },
-      });
-      map.addLayer({
-        id: "cluster-count",
-        type: "symbol",
-        source: "events",
-        filter: ["has", "point_count"],
-        layout: {
-          "text-field": ["get", "point_count_abbreviated"],
-          "text-size": 12,
-          "text-font": LABEL_FONT,
-        },
-        paint: { "text-color": "#0b0b3b" },
-      });
-      // …individual 2525 symbols at high zoom
+      // Every event stays individually visible with its serial number — no
+      // clustering (proof-build convention; tight groups are displaced instead).
       map.addLayer({
         id: "event-symbols",
         type: "symbol",
         source: "events",
-        filter: ["!", ["has", "point_count"]],
         layout: {
           "icon-image": ["get", "sidc"],
           "icon-size": 1,
@@ -113,21 +118,28 @@ export default function TheaterMap({ events, selectedId, onSelect }: Props) {
           "text-halo-width": 1.2, // GEO-5: halo keeps labels legible over linework
         },
       });
+      // serial number badge, proof-build style
+      map.addLayer({
+        id: "event-numbers",
+        type: "symbol",
+        source: "events",
+        layout: {
+          "text-field": ["get", "num"],
+          "text-size": 10,
+          "text-offset": [1.1, -1.1],
+          "text-allow-overlap": true,
+          "text-font": LABEL_FONT,
+        },
+        paint: {
+          "text-color": "#000057",
+          "text-halo-color": "#ffffff",
+          "text-halo-width": 1.6,
+        },
+      });
 
       map.on("click", "event-symbols", (ev: maplibregl.MapLayerMouseEvent) => {
         const f = ev.features?.[0];
         if (f?.properties?.id) onSelect(String(f.properties.id));
-      });
-      map.on("click", "clusters", async (ev: maplibregl.MapLayerMouseEvent) => {
-        const f = ev.features?.[0];
-        if (!f) return;
-        const src = map.getSource("events") as maplibregl.GeoJSONSource;
-        try {
-          const z = await src.getClusterExpansionZoom(f.properties?.cluster_id);
-          map.easeTo({ center: (f.geometry as GeoJSON.Point).coordinates as [number, number], zoom: z });
-        } catch {
-          // cluster vanished between click and expansion — nothing to do
-        }
       });
       map.on("mouseenter", "event-symbols", () => (map.getCanvas().style.cursor = "pointer"));
       map.on("mouseleave", "event-symbols", () => (map.getCanvas().style.cursor = ""));
@@ -167,7 +179,7 @@ export default function TheaterMap({ events, selectedId, onSelect }: Props) {
   return <div ref={container} style={{ position: "absolute", inset: 0 }} />;
 }
 
-function syncData(map: maplibregl.Map, events: TheaterEvent[]) {
+function syncData(map: maplibregl.Map, events: NumberedEvent[]) {
   // register any missing 2525 symbol images, then update the source
   const pending: Promise<void>[] = [];
   const seen = new Set<string>();

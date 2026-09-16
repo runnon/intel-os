@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { Affiliation, EventCategory, TheaterEvent } from "@intel-os/core";
+import type { Affiliation, EventCategory } from "@intel-os/core";
 import type { IssueRow } from "@/lib/db";
 import { applyView, decodeView, DEFAULT_VIEW, encodeView, type ViewState } from "@/lib/urlState";
-import TheaterMap from "./TheaterMap";
+import TheaterMap, { type NumberedEvent } from "./TheaterMap";
 import EventDetail from "./EventDetail";
 
 const WINDOW_PRESETS: { label: string; hours: number | null }[] = [
@@ -55,7 +55,13 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
     setView(decodeView(new URLSearchParams(searchParams.toString())));
   }, [searchParams]);
 
-  const events: TheaterEvent[] = issue.snapshot ?? [];
+  // Chronological serials over the whole issue snapshot (oldest = 1), stable
+  // regardless of active filters — proof-build numbering convention.
+  const events: NumberedEvent[] = useMemo(() => {
+    const asc = [...(issue.snapshot ?? [])].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt));
+    const nums = new Map(asc.map((e, i) => [e.id, i + 1]));
+    return (issue.snapshot ?? []).map((e) => ({ ...e, num: nums.get(e.id)! }));
+  }, [issue.snapshot]);
   const filtered = useMemo(
     () => applyView(events, view, issue.info_cutoff),
     [events, view, issue.info_cutoff],
@@ -85,6 +91,12 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
         <span className="font-mono text-xs text-[#8a6100] ml-auto">
           INFO CUT-OFF {zulu(issue.info_cutoff)}
         </span>
+        <a
+          href={`/t/${issue.aor.toLowerCase()}/report${typeof window !== "undefined" && window.location.search ? window.location.search : ""}`}
+          className="font-mono text-[11px] px-2.5 py-1 rounded-md border border-[#000057] bg-[#000057] text-white hover:bg-[#1a1a7a]"
+        >
+          GENERATE REPORT
+        </a>
       </header>
 
       {/* Controls */}
@@ -189,6 +201,7 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
                 }`}
               >
                 <div className="flex items-baseline gap-2">
+                  <span className="shrink-0 font-mono text-[10px] text-black/40 w-5">{String(e.num).padStart(2, "0")}</span>
                   <span
                     className={`shrink-0 inline-block w-2 h-2 rounded-none rotate-45 ${
                       e.affiliation === "hostile"
