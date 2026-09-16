@@ -48,3 +48,9 @@ body {
   letter-spacing: 0.08em;
   padding: 1px 7px;
 }
+
+/* Scale bar lives in the top-right control stack, pushed below the legend box.
+   Higher specificity than maplibre-gl.css's own top:0 rule. */
+.maplibregl-map .maplibregl-ctrl-top-right {
+  top: 138px;
+}
