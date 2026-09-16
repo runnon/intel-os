@@ -88,7 +88,7 @@ export default function TheaterMap({ events, selectedId, onSelect }: Props) {
     (window as unknown as { __theaterMap?: maplibregl.Map }).__theaterMap = map;
     map.on("error", (e: maplibregl.ErrorEvent) => console.error("[theater-map]", e.error?.message ?? e));
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-left");
-    map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "top-right");
+    map.addControl(new maplibregl.ScaleControl({ unit: "metric" }));
 
     map.on("style.load", () => {
       recolorToPrint(map);
