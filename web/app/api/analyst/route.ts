@@ -36,16 +36,6 @@ interface ChatMessage {
 }
 
 export async function POST(req: Request) {
-  const configured =
-    process.env.MODEL_BACKEND === "anthropic"
-      ? Boolean(process.env.ANTHROPIC_API_KEY)
-      : Boolean(process.env.BEDROCK_AWS_ACCESS_KEY_ID ?? process.env.AWS_ACCESS_KEY_ID);
-  if (!configured) {
-    return NextResponse.json(
-      { error: "Analyst drafting is not configured yet (no model backend credentials on the server)." },
-      { status: 503 },
-    );
-  }
   const body = (await req.json()) as { messages: ChatMessage[] };
   const messages = (body.messages ?? []).slice(-12).filter((m) => m.role === "user" || m.role === "assistant");
   if (messages.length === 0 || messages[messages.length - 1].role !== "user") {
@@ -84,7 +74,9 @@ export async function POST(req: Request) {
   const covered = latest.map((i) => i.aor).join(", ") || "none";
 
   const { client: anthropic, model } = makeModel();
-  const response = await anthropic.messages.create({
+  let response;
+  try {
+    response = await anthropic.messages.create({
     model,
     max_tokens: 4000,
     system: SYSTEM,
@@ -96,7 +88,17 @@ export async function POST(req: Request) {
       { role: "assistant" as const, content: "Understood. I have the published issue data and will draft facts-only report text on request, citing event numbers and issue serials." },
       ...messages,
     ],
-  });
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/credential|authentication|api[- ]?key|resolve|expired token|security token/i.test(msg)) {
+      return NextResponse.json(
+        { error: "Analyst drafting is not configured on this server (model backend credentials unavailable)." },
+        { status: 503 },
+      );
+    }
+    return NextResponse.json({ error: `model request failed: ${msg.slice(0, 200)}` }, { status: 502 });
+  }
 
   if (response.stop_reason === "refusal") {
     return NextResponse.json({ error: "The model declined this request." }, { status: 200 });
