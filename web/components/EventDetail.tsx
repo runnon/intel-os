@@ -21,7 +21,7 @@ export default function EventCallout({
 }) {
   return (
     <div
-      className="absolute top-3 left-14 z-20 w-[330px] max-w-[calc(100%-72px)] max-h-[calc(100%-70px)] overflow-y-auto bg-[#f5f2ea] border border-[#171712] shadow-xl"
+      className="absolute top-3 left-14 z-20 w-[330px] max-w-[calc(100%-72px)] max-h-[calc(100%-40px)] overflow-y-auto bg-[#f5f2ea] border border-[#171712] shadow-xl"
       style={{ borderLeftWidth: 5, borderLeftColor: color }}
     >
       {/* header */}

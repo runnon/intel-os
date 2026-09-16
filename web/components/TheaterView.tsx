@@ -190,7 +190,7 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
           />
 
           {/* LEGEND doubles as the affiliation filter (proof-build block) */}
-          <div className="absolute bottom-8 left-3 z-10 bg-[#f5f2ea]/95 border border-[#171712] px-3 py-2">
+          <div className="absolute top-3 right-3 z-10 bg-[#f5f2ea]/95 border border-[#171712] px-3 py-2">
             <div className="font-mono text-[9px] tracking-[0.2em] text-[#6b675c] mb-1.5">LEGEND · CLICK TO FILTER</div>
             {AFF_META.map((a) => {
               const active = view.affiliations.length === 0 || view.affiliations.includes(a.key);
