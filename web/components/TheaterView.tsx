@@ -280,7 +280,7 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
         </p>
         <p className="font-mono text-[9px] text-[#918c7d]">
           Symbology: MIL-STD-2525E affiliation frames carrying the event serial (the Activities set defines no icons for conventional operations).
-          Dashed frames mark region-level precision; tight groups are displaced for legibility.
+          Dashed frames mark region-level precision; closely co-located symbols are slightly displaced for legibility.
         </p>
       </footer>
     </div>

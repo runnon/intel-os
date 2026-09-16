@@ -88,8 +88,8 @@ export default function ReportSheet({ issue }: { issue: IssueRow }) {
             <TheaterMap events={plottable} selectedId={null} onSelect={() => {}} />
           </div>
           <p className="font-mono text-[9px] text-black/50 mt-1.5 leading-relaxed">
-            (U) Numbered points are events, chronological within the issue window; symbols in
-            tight groups are displaced for legibility. Positions derive from place names
+            (U) Numbered points are events, chronological within the issue window; closely co-located
+            symbols are slightly displaced for legibility. Positions derive from place names
             validated against a gazetteer; region-level reports carry dashed frames; events
             below the geolocation confidence threshold are listed without a plotted point.
             Symbols are MIL-STD-2525E affiliation frames carrying the event serial — the
