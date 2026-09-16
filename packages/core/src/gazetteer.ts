@@ -238,6 +238,11 @@ export const EUCOM_GAZETTEER: GazetteerEntry[] = [
   { name: 'United Kingdom', aliases: ['uk', 'britain'], country: 'United Kingdom', lat: 54.0, lon: -2.0, kind: 'region' },
   { name: 'France', aliases: [], country: 'France', lat: 46.6, lon: 2.5, kind: 'region' },
   { name: 'Norway', aliases: [], country: 'Norway', lat: 64.5, lon: 11.0, kind: 'region' },
+  { name: 'Netherlands', aliases: ['the netherlands', 'holland'], country: 'Netherlands', lat: 52.2, lon: 5.3, kind: 'region' },
+  { name: 'Denmark', aliases: [], country: 'Denmark', lat: 56.0, lon: 10.0, kind: 'region' },
+  { name: 'Italy', aliases: [], country: 'Italy', lat: 42.8, lon: 12.8, kind: 'region' },
+  { name: 'Sicily', aliases: [], country: 'Italy', lat: 37.6, lon: 14.2, kind: 'region' },
+  { name: 'Spain', aliases: [], country: 'Spain', lat: 40.2, lon: -3.7, kind: 'region' },
 ];
 
 export const INDOPACOM_GAZETTEER: GazetteerEntry[] = [
@@ -349,7 +354,10 @@ export const AFRICOM_GAZETTEER: GazetteerEntry[] = [
   { name: 'Burkina Faso', aliases: [], country: 'Burkina Faso', lat: 12.2, lon: -1.6, kind: 'region' },
   { name: 'Nigeria', aliases: [], country: 'Nigeria', lat: 9.1, lon: 8.7, kind: 'region' },
   { name: 'Libya', aliases: [], country: 'Libya', lat: 27.0, lon: 17.0, kind: 'region' },
-  { name: 'DRC', aliases: ['democratic republic of the congo', 'congo'], country: 'DRC', lat: -2.9, lon: 23.6, kind: 'region' },
+  { name: 'DRC', aliases: ['democratic republic of the congo', 'democratic republic of congo', 'dr congo', 'congo'], country: 'Democratic Republic of Congo', lat: -2.9, lon: 23.6, kind: 'region' },
+  { name: 'Eastern DRC', aliases: ['eastern congo', 'north kivu', 'south kivu'], country: 'Democratic Republic of Congo', lat: -2.0, lon: 28.5, kind: 'region' },
+  { name: 'Johannesburg', aliases: [], country: 'South Africa', lat: -26.2, lon: 28.05, kind: 'city' },
+  { name: 'South Africa', aliases: [], country: 'South Africa', lat: -29.0, lon: 25.1, kind: 'region' },
   { name: 'Kenya', aliases: [], country: 'Kenya', lat: 0.4, lon: 37.9, kind: 'region' },
   { name: 'Mozambique', aliases: [], country: 'Mozambique', lat: -18.7, lon: 35.5, kind: 'region' },
 ];
@@ -365,6 +373,10 @@ export const NORTHCOM_GAZETTEER: GazetteerEntry[] = [
   { name: 'Eielson Air Force Base', aliases: ['eielson afb'], country: 'United States', lat: 64.67, lon: -147.1, kind: 'base' },
   { name: 'Aleutian Islands', aliases: ['aleutians'], country: 'United States', lat: 52.0, lon: -174.0, kind: 'region' },
   { name: 'El Paso', aliases: [], country: 'United States', lat: 31.76, lon: -106.49, kind: 'city' },
+  { name: 'The Pentagon', aliases: ['pentagon', 'arlington'], country: 'United States', lat: 38.87, lon: -77.06, kind: 'facility' },
+  { name: 'Naval Station Mayport', aliases: ['mayport'], country: 'United States', lat: 30.39, lon: -81.41, kind: 'base' },
+  { name: 'Houston', aliases: [], country: 'United States', lat: 29.76, lon: -95.37, kind: 'city' },
+  { name: 'Seattle', aliases: [], country: 'United States', lat: 47.61, lon: -122.33, kind: 'city' },
   { name: 'Mexico City', aliases: [], country: 'Mexico', lat: 19.43, lon: -99.13, kind: 'city' },
   { name: 'Tijuana', aliases: [], country: 'Mexico', lat: 32.51, lon: -117.04, kind: 'city' },
   { name: 'Ciudad Juarez', aliases: ['juarez'], country: 'Mexico', lat: 31.69, lon: -106.42, kind: 'city' },

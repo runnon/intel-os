@@ -87,7 +87,9 @@ export function makeClaudeExtractor(override?: { client: Anthropic | AnthropicBe
 
     const now = new Date().toISOString();
     return parsed.events.map((e): TheaterEvent => {
-      const geo = geolocate(e.placeName ?? '', e.country || undefined, GAZETTEERS[aor]);
+      // No named place but a known country → geolocate the country itself so
+      // the curated country centroid can plot it at region precision (DATA-3).
+      const geo = geolocate(e.placeName || e.country || '', e.country || undefined, GAZETTEERS[aor]);
       const sources = (e.sourceUrls ?? [])
         .map((url: string) => articles.find((a) => a.url === url))
         .filter(Boolean)
