@@ -167,3 +167,22 @@ describe('runIngestOnce', () => {
     expect(state.issues.map((i) => i.issue.serial)).toEqual(['SU-CEN-26-001', 'SU-CEN-26-002']);
   });
 });
+
+describe('configuredAors', () => {
+  it('defaults to all six commands', async () => {
+    const { configuredAors } = await import('../src/feeds');
+    expect(configuredAors(undefined)).toEqual([
+      'CENTCOM', 'EUCOM', 'INDOPACOM', 'AFRICOM', 'NORTHCOM', 'SOUTHCOM',
+    ]);
+  });
+
+  it('honors a csv override and normalizes case', async () => {
+    const { configuredAors } = await import('../src/feeds');
+    expect(configuredAors('eucom, CENTCOM')).toEqual(['EUCOM', 'CENTCOM']);
+  });
+
+  it('throws when nothing matches', async () => {
+    const { configuredAors } = await import('../src/feeds');
+    expect(() => configuredAors('SPACECOM')).toThrow();
+  });
+});

@@ -66,3 +66,25 @@ entitled generation; structured outputs verified working). Backend switch lives
 in worker/src/model.ts + web/lib/model.ts. First live ingest published
 SU-CEN-26-003: 53 articles → 12 events, attribution discipline and unplotted-
 below-threshold behavior confirmed on real data.
+
+## 2026-09-15 — All six combatant commands live; source catalog expanded
+
+Ingest expanded from CENTCOM-only to all six AORs per cron cycle (single worker
+run loops `configuredAors`, sequential so one theater's failure can't block
+another's issue — AUTO-9 stays per-AOR). Each AOR gets:
+
+- a **curated gazetteer** (`GAZETTEERS[aor]`, packages/core) — hand-verified
+  cities, bases, chokepoints, conflict regions, country-centroid fallbacks;
+  uncurated places stay unplotted (AUTO-3 unchanged);
+- a **regional feed set** on top of a shared catalog. Shared: Al Jazeera, BBC
+  World, UN News, Defense.gov releases, Defense One, gCaptain, Naval News.
+  Regional: BBC desk feeds (Middle East/Europe/Asia/Africa/US&Canada/LatAm),
+  France 24 Africa/Americas;
+- a **per-AOR GDELT DOC query** sweeping thousands of outlets (429s handled
+  with enforced request spacing + one retry).
+
+All feeds are direct public HTTPS/RSS — no API keys, no third-party revocable
+services, NIPRNet-compatible. Cadence stays `0 */12 * * *` (user confirmed the
+12-hour cycle). Feed catalog additions verified live: every outlet resolved on
+first smoke test except Defense One (fast-xml-parser entity-expansion limit —
+fixed by disabling entity processing and decoding common entities manually).

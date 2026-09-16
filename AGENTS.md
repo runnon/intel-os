@@ -48,6 +48,13 @@ Concretely, always verify:
    published issue row; corrections happen via new issues and event revisions (DATA-6).
 7. **MARK-2/3:** the UNCLASSIFIED / open-sources / not-official banners stay on every
    page and every export. No agency seals or official-looking serials, ever.
+8. **Multi-AOR ingest:** every cron cycle sweeps all six combatant commands
+   (`worker/src/index.ts` loops `configuredAors`; override with an `AORS` csv env
+   var). Each AOR has its own curated gazetteer (`GAZETTEERS[aor]` in
+   `packages/core/src/gazetteer.ts`) and its own feed set + GDELT query
+   (`worker/src/feeds.ts`). Never geolocate one AOR's events against another's
+   gazetteer, and never add a gazetteer entry with unverified coordinates —
+   an uncurated place correctly renders as "position withheld".
 
 ## Verification steps (run, don't assume)
 

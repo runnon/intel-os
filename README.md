@@ -7,7 +7,7 @@ correct, briefable sheet.
 **Unclassified, open sources only, forever.** Not an official product of any government
 agency. MIT licensed — see `LICENSE` and `CONTRIBUTING.md`.
 
-**Live**: https://intel-os-self.vercel.app (CENTCOM watch, 12-hour unattended cycle)
+**Live**: https://intel-os-self.vercel.app (all six combatant commands, 12-hour unattended cycle)
 
 The product spec and the hand-built proof sheet (OS-IRN-26-001) are maintained outside
 this repository; the spec's requirement IDs (AUTO/DATA/UX/ANL/GEO/MARK/NFR) referenced
@@ -16,9 +16,13 @@ throughout the code are mapped in the conformance table below.
 ## Architecture
 
 ```
-worker/   Ingest loop (Railway, cron 0 */12 * * *): public feeds (RSS + GDELT)
-          → Claude extraction (reported facts only, attribution discipline)
-          → dedup → gazetteer-validated geolocation → publish situation update
+worker/   Ingest loop (Railway, cron 0 */12 * * *): each cycle sweeps ALL six
+          AORs. Per AOR: shared public feeds (Al Jazeera, BBC World, UN News,
+          DoD releases, Defense One, gCaptain, Naval News) + regional feeds
+          (BBC desk feeds, France 24 regions) + a per-AOR GDELT sweep of
+          thousands of outlets → Claude extraction (reported facts only,
+          attribution discipline) → dedup → geolocation validated against that
+          AOR's curated gazetteer → publish situation update per AOR
 packages/core  Domain logic: event model, MIL-STD-2525E SIDC mapping, dedup,
           gazetteer + confidence scoring, situation-update builder, marking guards
 web/      Next.js theater view (Vercel): command selector → MapLibre map with

@@ -3,7 +3,7 @@ import type { AnthropicBedrock } from '@anthropic-ai/bedrock-sdk';
 import { makeModel } from './model';
 import { randomUUID } from 'node:crypto';
 import type { Aor, TheaterEvent } from '@intel-os/core';
-import { geolocate } from '@intel-os/core';
+import { GAZETTEERS, geolocate } from '@intel-os/core';
 import type { Article } from './feeds';
 
 /**
@@ -66,7 +66,7 @@ export function makeClaudeExtractor(override?: { client: Anthropic | AnthropicBe
   const { client: anthropic, model } = override ?? makeModel();
   return async (articles, aor) => {
     if (articles.length === 0) return [];
-    const batch = articles.slice(0, 80).map((a, i) =>
+    const batch = articles.slice(0, 120).map((a, i) =>
       `[${i}] ${a.title}\n    outlet: ${a.outlet} | published: ${a.publishedAt}\n    url: ${a.url}${a.summary ? `\n    summary: ${a.summary}` : ''}`,
     ).join('\n');
 
@@ -87,7 +87,7 @@ export function makeClaudeExtractor(override?: { client: Anthropic | AnthropicBe
 
     const now = new Date().toISOString();
     return parsed.events.map((e): TheaterEvent => {
-      const geo = geolocate(e.placeName ?? '', e.country || undefined);
+      const geo = geolocate(e.placeName ?? '', e.country || undefined, GAZETTEERS[aor]);
       const sources = (e.sourceUrls ?? [])
         .map((url: string) => articles.find((a) => a.url === url))
         .filter(Boolean)

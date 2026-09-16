@@ -221,3 +221,58 @@ describe('MARK-4 public-source guard', () => {
     expect(() => assertPublicSource('not a url')).toThrow(/MARK-4/);
   });
 });
+
+describe('per-AOR gazetteers (multi-command expansion)', () => {
+  it('covers every AOR with a non-trivial curated gazetteer', async () => {
+    const { GAZETTEERS, AORS } = await import('../src/index');
+    for (const aor of AORS) {
+      expect(GAZETTEERS[aor].length, aor).toBeGreaterThan(20);
+    }
+  });
+
+  it('has no duplicate names/aliases within an AOR gazetteer', async () => {
+    const { GAZETTEERS, AORS } = await import('../src/index');
+    for (const aor of AORS) {
+      const seen = new Set<string>();
+      for (const entry of GAZETTEERS[aor]) {
+        for (const n of [entry.name.toLowerCase(), ...entry.aliases.map((a) => a.toLowerCase())]) {
+          expect(seen.has(n), `${aor}: duplicate "${n}"`).toBe(false);
+          seen.add(n);
+        }
+      }
+    }
+  });
+
+  it('has plausible coordinates everywhere', async () => {
+    const { GAZETTEERS, AORS } = await import('../src/index');
+    for (const aor of AORS) {
+      for (const entry of GAZETTEERS[aor]) {
+        expect(Math.abs(entry.lat), `${aor}:${entry.name}`).toBeLessThanOrEqual(90);
+        expect(Math.abs(entry.lon), `${aor}:${entry.name}`).toBeLessThanOrEqual(180);
+      }
+    }
+  });
+
+  it('geolocates well-known places per AOR above threshold', async () => {
+    const { GAZETTEERS, geolocate } = await import('../src/index');
+    const cases = [
+      ['EUCOM', 'Kyiv', 'Ukraine'],
+      ['INDOPACOM', 'Taiwan Strait', undefined],
+      ['AFRICOM', 'Mogadishu', 'Somalia'],
+      ['NORTHCOM', 'Ciudad Juarez', 'Mexico'],
+      ['SOUTHCOM', 'Panama Canal', 'Panama'],
+    ] as const;
+    for (const [aor, place, country] of cases) {
+      const r = geolocate(place, country, GAZETTEERS[aor]);
+      expect(r.validated, `${aor}:${place}`).toBe(true);
+      expect(r.confidence).toBeGreaterThanOrEqual(GEO_CONFIDENCE_THRESHOLD);
+    }
+  });
+
+  it('withholds unknown places in new AORs (AUTO-3)', async () => {
+    const { GAZETTEERS, geolocate } = await import('../src/index');
+    const r = geolocate('Some Village Nobody Curated', undefined, GAZETTEERS.EUCOM);
+    expect(r.validated).toBe(false);
+    expect(r.lat).toBeNull();
+  });
+});

@@ -1,12 +1,8 @@
 /** Core domain types for Theater Picture. Field names track Product Spec v0.1 §6. */
 
-export type Aor =
-  | 'CENTCOM'
-  | 'EUCOM'
-  | 'INDOPACOM'
-  | 'AFRICOM'
-  | 'NORTHCOM'
-  | 'SOUTHCOM';
+export const AORS = ['CENTCOM', 'EUCOM', 'INDOPACOM', 'AFRICOM', 'NORTHCOM', 'SOUTHCOM'] as const;
+
+export type Aor = (typeof AORS)[number];
 
 /** Actor conducting the action. DATA-4: contested/unclaimed resolves to 'unknown', never a guess. */
 export type Affiliation = 'hostile' | 'friendly' | 'neutral' | 'unknown';
