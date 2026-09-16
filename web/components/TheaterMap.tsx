@@ -11,7 +11,7 @@ import { symbolFor } from "@/lib/symbols";
 // the same style/tiles self-host (Protomaps/OpenMapTiles) for restricted-network
 // deployments — swap STYLE_URL only.
 const STYLE_URL =
-  process.env.NEXT_PUBLIC_BASEMAP_STYLE_URL ?? "https://tiles.openfreemap.org/styles/dark";
+  process.env.NEXT_PUBLIC_BASEMAP_STYLE_URL ?? "https://tiles.openfreemap.org/styles/positron";
 const LABEL_FONT = ["Noto Sans Regular"];
 
 interface Props {
@@ -73,8 +73,8 @@ export default function TheaterMap({ events, selectedId, onSelect }: Props) {
         source: "events",
         filter: ["has", "point_count"],
         paint: {
-          "circle-color": "#03034d",
-          "circle-stroke-color": "rgba(242,242,242,0.55)",
+          "circle-color": "#ffffff",
+          "circle-stroke-color": "rgba(0,0,87,0.55)",
           "circle-stroke-width": 1.5,
           "circle-radius": ["step", ["get", "point_count"], 14, 5, 18, 15, 24],
         },
@@ -89,7 +89,7 @@ export default function TheaterMap({ events, selectedId, onSelect }: Props) {
           "text-size": 12,
           "text-font": LABEL_FONT,
         },
-        paint: { "text-color": "#f2f2f2" },
+        paint: { "text-color": "#0b0b3b" },
       });
       // …individual 2525 symbols at high zoom
       map.addLayer({
@@ -108,8 +108,8 @@ export default function TheaterMap({ events, selectedId, onSelect }: Props) {
           "text-font": LABEL_FONT,
         },
         paint: {
-          "text-color": "#f2f2f2",
-          "text-halo-color": "#000033",
+          "text-color": "#0b0b3b",
+          "text-halo-color": "#ffffff",
           "text-halo-width": 1.2, // GEO-5: halo keeps labels legible over linework
         },
       });

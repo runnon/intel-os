@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #000057;
-  --foreground: #f2f2f2;
+  --background: #ffffff;
+  --foreground: #0b0b3b;
   --accent-gold: #e3b341;
 }
 
@@ -31,8 +31,8 @@ body {
 /* Section tag: white chip, dark text, uppercase (EXPLORE / RESOURCES style) */
 .tag {
   display: inline-block;
-  background: #f2f2f2;
-  color: #000057;
+  background: #000057;
+  color: #ffffff;
   font-family: var(--font-ui), sans-serif;
   font-size: 11px;
   font-weight: 600;

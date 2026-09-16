@@ -119,6 +119,6 @@ basemaps, white on dark (§5.5b).
 | affiliation: hostile action (Iranian/Houthi-attributed) | identity `6` Hostile |
 | affiliation: friendly action (US strike) | identity `3` Friend |
 | affiliation: unknown/contested (DATA-4: never a guess) | identity `1` Unknown (or `5` Suspect only when doctrine's "potential threat" bar is met) |
-| event category | Activities (40) entity/type codes; installations 20; ships 30 |
+| event category | Activities (40) codes **where the standard defines an icon**: strike → 110605 Rocket Explosion, maritime/infrastructure → 110600 Explosion; all other categories stay at reserved 110000 → affiliation framing only (GEO-4 "2525-informed framing", disclosed in the UI footer). The Activities set has no icons for conventional operations — full-fidelity COP symbology (units 10 / equipment 15 / installations 20) is a later layer |
 | `conf_origin`/`conf_actor` (DATA-5) | solid vs dotted frame + Evaluation Rating amplifier |
 | revision status | status digit (present vs suspected) |

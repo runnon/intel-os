@@ -17,22 +17,33 @@ export const IDENTITY: Record<Affiliation, string> = {
   unknown: '01',
 };
 
-/** Activities (set 40) entity/type codes from MIL-STD-2525E Appendix (tsv-tables/Activities.tsv). */
+/**
+ * Activities (set 40) entity/type codes from MIL-STD-2525E (tsv-tables/Activities.tsv).
+ * Honesty over decoration: 2525E's Activities set has no icons for conventional
+ * operations (no "missile strike", no "ground offensive"). Where the standard
+ * defines a matching icon we use it; where it doesn't, the code stays at the
+ * reserved Incident entity (110000), which renders as affiliation framing only —
+ * exactly the "2525-informed framing" posture GEO-4 requires us to disclose.
+ * Verified against milsymbol: 110600/110605 render true icons; 110000 does not.
+ */
 const ACTIVITY_CODE: Record<EventCategory, string> = {
-  strike: '110600', // Incident > Explosion
-  ground: '110000', // Incident (general)
-  maritime: '110000',
-  infrastructure: '110600',
-  'air-defense': '110000',
-  movement: '110000',
-  political: '110000',
+  strike: '110605', // Incident > Explosion > Rocket Explosion (closest true icon for missile/rocket/drone strikes)
+  ground: '110000', // no doctrinal icon — framing only
+  maritime: '110600', // Incident > Explosion (attack on shipping renders as explosion incident)
+  infrastructure: '110600', // Incident > Explosion
+  'air-defense': '110000', // no doctrinal icon — framing only
+  movement: '110000', // no doctrinal icon — framing only
+  political: '110000', // no doctrinal icon — framing only
   other: '110000',
 };
 
 export function eventSidc(ev: Pick<TheaterEvent, 'affiliation' | 'category' | 'precision'>): string {
   const identity = IDENTITY[ev.affiliation] ?? '01';
   const symbolSet = '40';
-  // status digit: region-level reporting renders as anticipated/suspected location (dashed)
+  // Deliberate, documented adaptation: DATA-3 demands region-level reports look
+  // different from confirmed points. We express that with status digit 1
+  // (planned/anticipated/SUSPECTED → dashed frame). Doctrinally status describes
+  // the event, not its position — accepted trade-off, disclosed in docs/symbology.
   const status = ev.precision === 'region' ? '1' : '0';
   const setA = `${VERSION}0${identity[1]}${symbolSet}${status}0` + '00';
   const setB = (ACTIVITY_CODE[ev.category] ?? '110000') + '0000';

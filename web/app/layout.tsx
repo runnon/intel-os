@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 // branding anywhere in this tree.
 function Banner() {
   return (
-    <div className="bg-[#1a4a2e] text-[#d8efe0] text-center text-[11px] tracking-[0.25em] font-mono py-1 select-none shrink-0">
+    <div className="bg-[#000057] text-[#f2f2f2] text-center text-[11px] tracking-[0.25em] font-mono py-1 select-none shrink-0">
       UNCLASSIFIED&ensp;·&ensp;OPEN SOURCES ONLY&ensp;·&ensp;NOT AN OFFICIAL
       GOVERNMENT PRODUCT
     </div>
@@ -29,7 +29,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${display.variable} ${ui.variable} h-full antialiased`}
     >
-      <body className="h-dvh flex flex-col bg-[#000057] text-[#f2f2f2]">
+      <body className="h-dvh flex flex-col bg-white text-[#0b0b3b]">
         <Banner />
         <div className="flex-1 min-h-0 flex flex-col">{children}</div>
         <Banner />

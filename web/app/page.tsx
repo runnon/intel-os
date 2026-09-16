@@ -30,31 +30,31 @@ function Tile({ aor, label, region, issue }: { aor: Aor; label: string; region: 
     <div
       className={`border rounded-md p-4 h-40 flex flex-col justify-between transition-colors ${
         live
-          ? "border-white/20 bg-transparent hover:border-white/60 cursor-pointer"
-          : "border-white/20 bg-[#000057] opacity-60"
+          ? "border-black/15 bg-transparent hover:border-black/40 cursor-pointer"
+          : "border-black/15 bg-white opacity-60"
       }`}
     >
       <div>
         <div className="flex items-baseline justify-between">
-          <h2 className="headline text-2xl text-[#f2f2f2]">{label}</h2>
+          <h2 className="headline text-2xl text-[#0b0b3b]">{label}</h2>
           {live ? (
-            <span className="text-xs font-medium text-[#e3b341] border border-[#e3b341]/60 bg-[#e3b341]/10 rounded-full px-2 py-0.5">Live</span>
+            <span className="text-xs font-medium text-[#8a6100] border border-[#8a6100]/50 bg-[#e3b341]/15 rounded-full px-2 py-0.5">Live</span>
           ) : (
-            <span className="text-xs font-medium text-white/40 border border-white/20 rounded-full px-2 py-0.5">No coverage</span>
+            <span className="text-xs font-medium text-black/40 border border-black/15 rounded-full px-2 py-0.5">No coverage</span>
           )}
         </div>
-        <p className="text-xs text-white/60 mt-1.5">{region}</p>
+        <p className="text-xs text-black/55 mt-1.5">{region}</p>
       </div>
       {issue ? (
-        <div className="font-mono text-xs text-white/60 space-y-1">
+        <div className="font-mono text-xs text-black/55 space-y-1">
           <div>
             {issue.tempo.totalEvents} events · {issue.tempo.newSinceLastIssue} new · issue{" "}
             {String(issue.issue_number).padStart(3, "0")}
           </div>
-          <div className="text-white/40">CUT-OFF {zulu(issue.info_cutoff)} · events only, no assessment layer</div>
+          <div className="text-black/40">CUT-OFF {zulu(issue.info_cutoff)} · events only, no assessment layer</div>
         </div>
       ) : (
-        <div className="font-mono text-xs text-white/40">
+        <div className="font-mono text-xs text-black/40">
           No published issues. This command has no ingest coverage yet — that is stated, not hidden.
         </div>
       )}
@@ -78,8 +78,8 @@ export default async function Home() {
       <div className="max-w-5xl mx-auto px-6 py-10">
         <header className="mb-8">
           <p className="mb-3"><span className="tag">Unclassified Theater Awareness</span></p>
-          <h1 className="headline text-5xl text-[#f2f2f2]">Theater Picture</h1>
-          <p className="text-sm leading-relaxed text-white/60 mt-2 max-w-2xl">
+          <h1 className="headline text-5xl text-[#0b0b3b]">Theater Picture</h1>
+          <p className="text-sm leading-relaxed text-black/55 mt-2 max-w-2xl">
             Pick a combatant command for a live, filterable geospatial picture of that theater,
             built entirely from publicly available information on an unattended 12-hour cycle.
             Situation updates carry reported facts only — an assessment layer publishes solely
@@ -87,7 +87,7 @@ export default async function Home() {
           </p>
         </header>
         {dbError && (
-          <p className="mb-6 text-xs font-mono text-[#e3b341]">data unavailable: {dbError}</p>
+          <p className="mb-6 text-xs font-mono text-[#8a6100]">data unavailable: {dbError}</p>
         )}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {AORS.map((a) => (

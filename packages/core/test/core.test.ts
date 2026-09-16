@@ -50,7 +50,7 @@ describe('sidc', () => {
     expect(sidc[3]).toBe('6'); // hostile
     expect(sidc.slice(4, 6)).toBe('40'); // activities
     expect(sidc[6]).toBe('0'); // present
-    expect(sidc.slice(10, 16)).toBe('110600'); // explosion
+    expect(sidc.slice(10, 16)).toBe('110605'); // rocket explosion (true 2525E icon)
   });
 
   it('region-precision events render dashed (status 1)', () => {
