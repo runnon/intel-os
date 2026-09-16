@@ -77,11 +77,12 @@ second run must dedupe to 0 new events.
 
 ## Style
 
-UI follows the Nous-portal-inspired system: deep navy `#000057` canvas, `#f2f2f2`
-text, white/20 borders on transparent cards, gold `#e3b341` accents, Oswald
-(`--font-display`, class `.headline`) for display type, Space Grotesk (`--font-ui`)
-for UI text, monospace for data/timestamps (Zulu format). Affiliation colors are
-MIL-STD-2525 semantics — never restyle them. Marking banners stay green.
+Light theme: white canvas, `#0b0b3b` navy ink, black/15 borders, dark-amber
+`#8a6100` accents, marking banners solid navy `#000057`. Oswald (`--font-display`,
+class `.headline`) for display type, Space Grotesk (`--font-ui`) for UI text,
+monospace for data/timestamps (Zulu). Report sheet (`/t/[aor]/report`) uses the
+cream proof-build paper style. Affiliation colors are MIL-STD-2525 semantics —
+never restyle them.
 
 ## Model backend
 
