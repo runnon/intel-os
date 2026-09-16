@@ -70,25 +70,25 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
   return (
     <div className="flex-1 min-h-0 flex flex-col">
       {/* Masthead — UX-4: information cut-off stated prominently at all times */}
-      <header className="border-b border-[#30363d] px-4 py-2 flex flex-wrap items-center gap-x-6 gap-y-1 bg-[#161b22] shrink-0">
-        <a href="/" className="font-sans text-sm font-semibold text-[#8b949e] hover:text-[#4493f8]">
-          ◂ Theater Picture
+      <header className="border-b border-white/20 px-4 py-2 flex flex-wrap items-center gap-x-6 gap-y-1 bg-[#03034d] shrink-0">
+        <a href="/" className="font-sans text-sm font-semibold text-white/60 hover:text-[#f2f2f2]">
+          // THEATER PICTURE
         </a>
-        <span className="headline text-base text-[#e6edf3]">{issue.aor}</span>
+        <span className="headline text-xl text-[#f2f2f2]">{issue.aor}</span>
         <a
           href={`/t/${issue.aor.toLowerCase()}/history`}
-          className="font-mono text-xs text-[#8b949e] hover:text-[#e6edf3]"
+          className="font-mono text-xs text-white/60 hover:text-[#f2f2f2]"
           title="Issue archive"
         >
           {issue.serial} · situation update · unattended, no judgement layer
         </a>
-        <span className="font-mono text-xs text-amber-300 ml-auto">
+        <span className="font-mono text-xs text-[#e3b341] ml-auto">
           INFO CUT-OFF {zulu(issue.info_cutoff)}
         </span>
       </header>
 
       {/* Controls */}
-      <div className="border-b border-[#30363d] px-4 py-2 flex flex-wrap items-center gap-2 bg-[#0d1117] text-[11px] font-mono shrink-0">
+      <div className="border-b border-white/20 px-4 py-2 flex flex-wrap items-center gap-2 bg-[#000057] text-[11px] font-mono shrink-0">
         <div className="flex gap-1">
           {WINDOW_PRESETS.map((w) => (
             <button
@@ -96,8 +96,8 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
               onClick={() => updateView({ windowHours: w.hours })}
               className={`px-2 py-0.5 rounded-md border ${
                 view.windowHours === w.hours
-                  ? "border-amber-400 text-amber-300"
-                  : "bg-[#21262d] border-[#30363d] text-[#c9d1d9] hover:border-[#8b949e]"
+                  ? "border-[#e3b341] text-[#e3b341]"
+                  : "bg-white/5 border-white/20 text-[#f2f2f2] hover:border-white/50"
               }`}
             >
               {w.label}
@@ -113,7 +113,7 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
                 key={a.key}
                 onClick={() => updateView({ affiliations: toggle(view.affiliations, a.key) })}
                 className={`px-2.5 py-1 rounded-md border flex items-center gap-1.5 ${
-                  active ? "bg-[#21262d] border-[#8b949e] text-[#e6edf3]" : "bg-[#161b22] border-[#30363d] text-[#6e7681]"
+                  active ? "bg-white/5 border-white/60 text-[#f2f2f2]" : "bg-[#03034d] border-white/20 text-white/40"
                 }`}
                 title={view.affiliations.length === 0 ? "showing all; click to filter" : undefined}
               >
@@ -129,7 +129,7 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
           onChange={(e) =>
             updateView({ categories: e.target.value ? [e.target.value as EventCategory] : [] })
           }
-          className="bg-[#161b22] border border-[#30363d] rounded-md px-2.5 py-1 text-[#e6edf3]"
+          className="bg-[#03034d] border border-white/20 rounded-md px-2.5 py-1 text-[#f2f2f2]"
         >
           <option value="">ALL CATEGORIES</option>
           {CATS.map((c) => (
@@ -141,7 +141,7 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
         <button
           onClick={() => updateView({ usOnly: !view.usOnly })}
           className={`px-2 py-0.5 rounded-md border ${
-            view.usOnly ? "border-amber-400 text-amber-300" : "bg-[#21262d] border-[#30363d] text-[#c9d1d9]"
+            view.usOnly ? "border-[#e3b341] text-[#e3b341]" : "bg-white/5 border-white/20 text-[#f2f2f2]"
           }`}
         >
           US FORCES
@@ -149,14 +149,14 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
         <select
           value={view.confidenceFloor}
           onChange={(e) => updateView({ confidenceFloor: e.target.value as ViewState["confidenceFloor"] })}
-          className="bg-[#161b22] border border-[#30363d] rounded-md px-2.5 py-1 text-[#e6edf3]"
+          className="bg-[#03034d] border border-white/20 rounded-md px-2.5 py-1 text-[#f2f2f2]"
           title="Confidence floor (origin confidence)"
         >
           <option value="low">CONF ≥ LOW</option>
           <option value="moderate">CONF ≥ MOD</option>
           <option value="high">CONF ≥ HIGH</option>
         </select>
-        <span className="ml-auto text-[#8b949e]">
+        <span className="ml-auto text-white/60">
           {filtered.length} events · {plottable.length} plotted
           {unplotted.length > 0 && ` · ${unplotted.length} listed without position`}
         </span>
@@ -173,10 +173,10 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
         </div>
 
         {/* Event list — synced with the map from the same view state (UX-1) */}
-        <aside className="md:w-96 md:border-l border-t md:border-t-0 border-[#30363d] bg-[#161b22] flex flex-col min-h-0 max-h-[45dvh] md:max-h-none">
+        <aside className="md:w-96 md:border-l border-t md:border-t-0 border-white/20 bg-[#03034d] flex flex-col min-h-0 max-h-[45dvh] md:max-h-none">
           <div className="overflow-y-auto flex-1">
             {filtered.length === 0 && (
-              <p className="p-4 text-xs font-mono text-[#8b949e]">
+              <p className="p-4 text-xs font-mono text-white/60">
                 No events match the current filters within this window.
               </p>
             )}
@@ -184,8 +184,8 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
               <button
                 key={e.id}
                 onClick={() => updateView({ selectedEvent: e.id === view.selectedEvent ? null : e.id })}
-                className={`group w-full text-left px-4 py-3 border-b border-[#21262d] hover:bg-[#1c2128] ${
-                  e.id === view.selectedEvent ? "bg-[#1c2a3a]" : ""
+                className={`group w-full text-left px-4 py-3 border-b border-white/10 hover:bg-white/5 ${
+                  e.id === view.selectedEvent ? "bg-white/10" : ""
                 }`}
               >
                 <div className="flex items-baseline gap-2">
@@ -200,13 +200,13 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
                             : "bg-[#ffff00]"
                     }`}
                   />
-                  <span className="font-sans text-sm font-semibold leading-snug text-[#e6edf3] group-hover:text-[#4493f8]">{e.title}</span>
+                  <span className="font-sans text-sm font-semibold leading-snug text-[#f2f2f2] group-hover:text-[#f2f2f2]">{e.title}</span>
                 </div>
-                <div className="font-mono text-[10px] text-[#6e7681] mt-1 flex gap-3">
+                <div className="font-mono text-[10px] text-white/40 mt-1 flex gap-3">
                   <span>{zulu(e.occurredAt)}</span>
                   <span>{e.placeName.toUpperCase()}</span>
-                  {(e.lat == null || e.lon == null) && <span className="text-amber-400">NO POSITION</span>}
-                  {e.usForcesFlag && <span className="text-amber-300">US</span>}
+                  {(e.lat == null || e.lon == null) && <span className="text-[#e3b341]">NO POSITION</span>}
+                  {e.usForcesFlag && <span className="text-[#e3b341]">US</span>}
                 </div>
               </button>
             ))}
@@ -216,8 +216,8 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
       </div>
 
       {/* Sourcing statement footer */}
-      <footer className="border-t border-[#30363d] px-4 py-1.5 bg-[#0d1117] shrink-0">
-        <p className="font-mono text-[10px] text-[#6e7681] truncate" title={issue.source_summary?.statement}>
+      <footer className="border-t border-white/20 px-4 py-1.5 bg-[#000057] shrink-0">
+        <p className="font-mono text-[10px] text-white/40 truncate" title={issue.source_summary?.statement}>
           {issue.source_summary?.statement}
         </p>
       </footer>

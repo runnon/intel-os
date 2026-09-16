@@ -1,12 +1,18 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import mapboxgl from "mapbox-gl";
-import "mapbox-gl/dist/mapbox-gl.css";
+import * as maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
 import type { TheaterEvent } from "@intel-os/core";
 import { symbolFor } from "@/lib/symbols";
 
-const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+// NFR-4/NFR-5: MapLibre (BSD) + OpenStreetMap-derived vector tiles. No token, no
+// commercial tile service that can revoke access. Interim style is OpenFreeMap;
+// the same style/tiles self-host (Protomaps/OpenMapTiles) for restricted-network
+// deployments — swap STYLE_URL only.
+const STYLE_URL =
+  process.env.NEXT_PUBLIC_BASEMAP_STYLE_URL ?? "https://tiles.openfreemap.org/styles/dark";
+const LABEL_FONT = ["Noto Sans Regular"];
 
 interface Props {
   events: TheaterEvent[]; // pre-filtered, all with lat/lon
@@ -32,29 +38,25 @@ function toGeoJSON(events: TheaterEvent[]): GeoJSON.FeatureCollection {
 
 export default function TheaterMap({ events, selectedId, onSelect }: Props) {
   const container = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<mapboxgl.Map | null>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
   const readyRef = useRef(false);
   const eventsRef = useRef(events);
   eventsRef.current = events;
 
   useEffect(() => {
-    if (!TOKEN || !container.current || mapRef.current) return;
-    mapboxgl.accessToken = TOKEN;
-    const map = new mapboxgl.Map({
+    if (!container.current || mapRef.current) return;
+    const map = new maplibregl.Map({
       container: container.current,
-      style: "mapbox://styles/mapbox/dark-v11",
-      center: [47, 26], // CENTCOM-ish default; fitBounds adjusts on data
+      style: STYLE_URL,
+      center: [47, 26],
       zoom: 4,
-      attributionControl: true,
     });
     mapRef.current = map;
-    (window as unknown as { __theaterMap?: mapboxgl.Map }).__theaterMap = map;
-    map.on("error", (e) => console.error("[theater-map]", e.error?.message ?? e));
-    map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-left");
-    map.addControl(new mapboxgl.ScaleControl({ unit: "metric" }));
+    (window as unknown as { __theaterMap?: maplibregl.Map }).__theaterMap = map;
+    map.on("error", (e: maplibregl.ErrorEvent) => console.error("[theater-map]", e.error?.message ?? e));
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-left");
+    map.addControl(new maplibregl.ScaleControl({ unit: "metric" }));
 
-    // style.load (not load): sources/layers can attach as soon as the style is
-    // parsed, and unlike `load` it doesn't wait on every basemap tile settling.
     map.on("style.load", () => {
       map.addSource("events", {
         type: "geojson",
@@ -71,8 +73,8 @@ export default function TheaterMap({ events, selectedId, onSelect }: Props) {
         source: "events",
         filter: ["has", "point_count"],
         paint: {
-          "circle-color": "#1d2b38",
-          "circle-stroke-color": "#7b8894",
+          "circle-color": "#03034d",
+          "circle-stroke-color": "rgba(242,242,242,0.55)",
           "circle-stroke-width": 1.5,
           "circle-radius": ["step", ["get", "point_count"], 14, 5, 18, 15, 24],
         },
@@ -85,9 +87,9 @@ export default function TheaterMap({ events, selectedId, onSelect }: Props) {
         layout: {
           "text-field": ["get", "point_count_abbreviated"],
           "text-size": 12,
-          "text-font": ["DIN Pro Medium", "Arial Unicode MS Bold"],
+          "text-font": LABEL_FONT,
         },
-        paint: { "text-color": "#d7dde4" },
+        paint: { "text-color": "#f2f2f2" },
       });
       // …individual 2525 symbols at high zoom
       map.addLayer({
@@ -103,27 +105,29 @@ export default function TheaterMap({ events, selectedId, onSelect }: Props) {
           "text-size": 10,
           "text-offset": [0, 1.8],
           "text-optional": true,
-          "text-font": ["DIN Pro Regular", "Arial Unicode MS Regular"],
+          "text-font": LABEL_FONT,
         },
         paint: {
-          "text-color": "#c6d1db",
-          "text-halo-color": "#0b0f13",
+          "text-color": "#f2f2f2",
+          "text-halo-color": "#000033",
           "text-halo-width": 1.2, // GEO-5: halo keeps labels legible over linework
         },
       });
 
-      map.on("click", "event-symbols", (ev) => {
+      map.on("click", "event-symbols", (ev: maplibregl.MapLayerMouseEvent) => {
         const f = ev.features?.[0];
         if (f?.properties?.id) onSelect(String(f.properties.id));
       });
-      map.on("click", "clusters", (ev) => {
+      map.on("click", "clusters", async (ev: maplibregl.MapLayerMouseEvent) => {
         const f = ev.features?.[0];
         if (!f) return;
-        const clusterId = f.properties?.cluster_id;
-        (map.getSource("events") as mapboxgl.GeoJSONSource).getClusterExpansionZoom(clusterId, (err, z) => {
-          if (err || z == null) return;
+        const src = map.getSource("events") as maplibregl.GeoJSONSource;
+        try {
+          const z = await src.getClusterExpansionZoom(f.properties?.cluster_id);
           map.easeTo({ center: (f.geometry as GeoJSON.Point).coordinates as [number, number], zoom: z });
-        });
+        } catch {
+          // cluster vanished between click and expansion — nothing to do
+        }
       });
       map.on("mouseenter", "event-symbols", () => (map.getCanvas().style.cursor = "pointer"));
       map.on("mouseleave", "event-symbols", () => (map.getCanvas().style.cursor = ""));
@@ -157,26 +161,13 @@ export default function TheaterMap({ events, selectedId, onSelect }: Props) {
     }
   }, [selectedId, events]);
 
-  if (!TOKEN) {
-    return (
-      <div className="absolute inset-0 flex items-center justify-center bg-[#0d1319]">
-        <div className="text-center max-w-sm px-6">
-          <p className="font-mono text-sm text-amber-300 mb-2">MAP UNAVAILABLE</p>
-          <p className="text-xs text-[#8b98a5]">
-            Set <code className="font-mono">NEXT_PUBLIC_MAPBOX_TOKEN</code> to render the theater
-            map. Events remain available in the list — a degraded picture states its degradation.
-          </p>
-        </div>
-      </div>
-    );
-  }
-  // Inline style: mapbox-gl.css sets `.mapboxgl-map { position: relative }`,
-  // which beats a Tailwind `absolute` class in the cascade and collapses the
-  // container to zero height. Inline wins over both.
+  // Inline style: the renderer's stylesheet sets `position: relative` on the
+  // container class, which beats a Tailwind `absolute` in the cascade and
+  // collapses the div to zero height. Inline wins over both.
   return <div ref={container} style={{ position: "absolute", inset: 0 }} />;
 }
 
-function syncData(map: mapboxgl.Map, events: TheaterEvent[]) {
+function syncData(map: maplibregl.Map, events: TheaterEvent[]) {
   // register any missing 2525 symbol images, then update the source
   const pending: Promise<void>[] = [];
   const seen = new Set<string>();
@@ -197,16 +188,16 @@ function syncData(map: mapboxgl.Map, events: TheaterEvent[]) {
     );
   }
   void Promise.all(pending).then(() => {
-    const src = map.getSource("events") as mapboxgl.GeoJSONSource | undefined;
+    const src = map.getSource("events") as maplibregl.GeoJSONSource | undefined;
     src?.setData(toGeoJSON(events));
     // Fit once on first data; afterwards the analyst's pan/zoom is theirs.
     if (events.length > 0 && !fittedMaps.has(map)) {
       fittedMaps.add(map);
-      const b = new mapboxgl.LngLatBounds();
+      const b = new maplibregl.LngLatBounds();
       for (const e of events) b.extend([e.lon!, e.lat!]);
       map.fitBounds(b, { padding: 80, maxZoom: 7, duration: 500 });
     }
   });
 }
 
-const fittedMaps = new WeakSet<mapboxgl.Map>();
+const fittedMaps = new WeakSet<maplibregl.Map>();

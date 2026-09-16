@@ -21,7 +21,7 @@ worker/   Ingest loop (Railway, cron 0 */12 * * *): public feeds (RSS + GDELT)
           → dedup → gazetteer-validated geolocation → publish situation update
 packages/core  Domain logic: event model, MIL-STD-2525E SIDC mapping, dedup,
           gazetteer + confidence scoring, situation-update builder, marking guards
-web/      Next.js theater view (Vercel): command selector → Mapbox map with
+web/      Next.js theater view (Vercel): command selector → MapLibre map with
           milsymbol 2525E symbols, synced event list, time control, URL-encoded
           filter state, per-event sourcing and confidence
 supabase/ Postgres schema: events, event_sources, event_revisions, issues
@@ -52,7 +52,7 @@ npx tsx src/seed.ts                   # deterministic seed (proof-build events, 
 Env:
 
 - `web/.env.local` — `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
-  `NEXT_PUBLIC_MAPBOX_TOKEN`
+  
 - `worker/.env` — `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`, `AOR`
 
 ## Spec conformance map

@@ -38,3 +38,19 @@ docs/symbology/README.md for the distilled rendering rules and the event→SIDC 
 - **Web** runs on Vercel (not yet linked). Needs NEXT_PUBLIC_MAPBOX_TOKEN.
 - **Model choice**: extraction uses `claude-opus-4-8` (structured outputs via
   `output_config.format`). Revisit for cost once volume is known.
+
+## 2026-09-15 — Mapbox reverted; MapLibre + open tiles; NIPRNet is a standing constraint
+
+- The 2026-09-15 Mapbox amendment is **reverted**. NFR-4/NFR-5 are back in force:
+  renderer is **MapLibre GL (BSD)**, basemap is OpenStreetMap-derived vector tiles.
+  Interim tile host is OpenFreeMap (`NEXT_PUBLIC_BASEMAP_STYLE_URL` overrides it);
+  full self-hosting via Protomaps/OpenMapTiles is the deployment path for restricted
+  networks. No tokens anywhere.
+- **Pin maplibre-gl to v5.x.** v6.10.0 has a worker wedge under this stack (worker
+  receives messages, never replies → style never loads, nothing renders). v5.24.0
+  verified working.
+- **NIPRNet/DoD-network compatibility is a standing constraint** on all future work —
+  encoded in AGENTS.md, which agents must check on every change.
+- UI restyled to the Nous-portal-inspired system (navy #000057, Oswald display,
+  Space Grotesk UI, gold accents) — third and final restyle; tokens documented in
+  AGENTS.md §Style.

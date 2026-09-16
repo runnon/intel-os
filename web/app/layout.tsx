@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
+import { Oswald, Space_Grotesk } from "next/font/google";
 import "./globals.css";
+
+const display = Oswald({ variable: "--font-display", subsets: ["latin"] });
+const ui = Space_Grotesk({ variable: "--font-ui", subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Theater Picture",
@@ -23,9 +27,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className="h-full antialiased"
+      className={`${display.variable} ${ui.variable} h-full antialiased`}
     >
-      <body className="h-dvh flex flex-col bg-[#0d1117] text-[#e6edf3]">
+      <body className="h-dvh flex flex-col bg-[#000057] text-[#f2f2f2]">
         <Banner />
         <div className="flex-1 min-h-0 flex flex-col">{children}</div>
         <Banner />

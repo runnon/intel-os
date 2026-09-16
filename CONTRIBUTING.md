@@ -35,8 +35,8 @@ npm run typecheck
   gazetteer, issue builder). Pure functions; add tests alongside changes.
 - `worker/` — the ingest pipeline (feeds → LLM extraction → dedup → geolocate →
   publish). `npx tsx src/seed.ts` runs a deterministic seed without an LLM key.
-- `web/` — Next.js + Mapbox GL theater view. `npx next dev` after copying
-  `web/.env.example` to `web/.env.local` (Supabase URL/anon key + a Mapbox token).
+- `web/` — Next.js + MapLibre GL theater view. `npx next dev` after copying
+  `web/.env.example` to `web/.env.local` (Supabase URL/anon key).
 - `supabase/migrations/` — schema. Public read via RLS; writes are service-role only.
 
 ## Good first contributions
