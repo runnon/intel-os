@@ -105,3 +105,17 @@ repo secret: RAILWAY_TOKEN (project token, intel-os production). The railway.jso
 cronSchedule is left in place as a harmless backup (dedup makes any double-run a
 no-op). A session-scoped Claude check (twice daily) independently verifies issue
 freshness and redeploys if stale, until the GitHub Action is confirmed firing.
+
+## 2026-09-16 (update) — Root cause fixed: cron set via Railway dashboard
+
+The scheduled cron never fired because Railway's config-as-code
+`deploy.cronSchedule` (railway.json) did NOT register on the service — the
+dashboard Cron Schedule field was empty ("Add Schedule"), and the deployment's
+serviceManifest.deploy.cronSchedule read null. Fix applied directly in the
+Railway dashboard (worker → Settings → Deploy → Cron Schedule = `0 */12 * * *`);
+serviceManifest.deploy.cronSchedule now reports "0 */12 * * *" and the service
+shows the next scheduled run. This is the actual fix — no external scheduler
+needed. The GitHub Actions workflow added earlier as a durable fallback was
+removed (it required a RAILWAY_TOKEN secret and would only have added redundant
+runs). The session-scoped Claude check remains as an independent verifier that
+the scheduled run keeps firing.
