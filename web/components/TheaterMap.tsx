@@ -25,14 +25,22 @@ interface Props {
 }
 
 /**
- * Display positions: symbols in tight groups (e.g. the Bahrain cluster) are
- * displaced in a small ring for legibility — the proof build does the same and
- * the practice is disclosed in the footer. True positions stay in the data.
+ * Display positions, computed in SCREEN pixels at the current zoom: symbols
+ * whose true points would overlap are displaced in a ring sized in pixels and
+ * tied back to their true position with a hairline — the proof build's own
+ * convention ("symbols displaced for legibility; a hairline ties each to its
+ * true point"). Displacement collapses automatically as you zoom in, because
+ * the same pixel radius covers ever less ground. True positions stay in the data.
  */
-function displaced(events: NumberedEvent[]): Map<string, [number, number]> {
+const SPREAD_PX = 30; // ring radius in screen pixels
+const GROUP_PX = 34; // symbols closer than this (px) get grouped
+
+function displaced(events: NumberedEvent[], zoom: number): Map<string, [number, number]> {
+  const lonPerPx = 360 / (512 * Math.pow(2, zoom));
   const groups = new Map<string, NumberedEvent[]>();
   for (const e of events) {
-    const key = `${Math.round(e.lat! / 0.35)}:${Math.round(e.lon! / 0.35)}`;
+    const latScale = Math.max(0.2, Math.cos((e.lat! * Math.PI) / 180));
+    const key = `${Math.round(e.lon! / (GROUP_PX * lonPerPx))}:${Math.round(e.lat! / (GROUP_PX * lonPerPx * latScale))}`;
     (groups.get(key) ?? groups.set(key, []).get(key)!).push(e);
   }
   const out = new Map<string, [number, number]>();
@@ -43,17 +51,25 @@ function displaced(events: NumberedEvent[]): Map<string, [number, number]> {
     }
     const cx = group.reduce((a, e) => a + e.lon!, 0) / group.length;
     const cy = group.reduce((a, e) => a + e.lat!, 0) / group.length;
+    const latScale = Math.max(0.2, Math.cos((cy * Math.PI) / 180));
+    // ring radius grows a little with group size so 4+ don't touch
+    const rPx = SPREAD_PX + Math.max(0, group.length - 3) * 8;
+    const rLon = rPx * lonPerPx;
+    const rLat = rPx * lonPerPx * latScale;
     group.forEach((e, i) => {
       const angle = (2 * Math.PI * i) / group.length - Math.PI / 2;
-      out.set(e.id, [cx + 0.28 * Math.cos(angle), cy + 0.22 * Math.sin(angle)]);
+      out.set(e.id, [cx + rLon * Math.cos(angle), cy + rLat * Math.sin(angle)]);
     });
   }
   return out;
 }
 
-function toGeoJSON(events: NumberedEvent[]): GeoJSON.FeatureCollection {
-  const pos = displaced(events);
-  return {
+function toGeoJSON(events: NumberedEvent[], zoom: number): {
+  points: GeoJSON.FeatureCollection;
+  leaders: GeoJSON.FeatureCollection;
+} {
+  const pos = displaced(events, zoom);
+  const points: GeoJSON.FeatureCollection = {
     type: "FeatureCollection",
     features: events.map((e) => ({
       type: "Feature",
@@ -67,6 +83,20 @@ function toGeoJSON(events: NumberedEvent[]): GeoJSON.FeatureCollection {
       },
     })),
   };
+  const leaders: GeoJSON.FeatureCollection = {
+    type: "FeatureCollection",
+    features: events
+      .filter((e) => {
+        const p = pos.get(e.id)!;
+        return p[0] !== e.lon! || p[1] !== e.lat!;
+      })
+      .map((e) => ({
+        type: "Feature",
+        geometry: { type: "LineString", coordinates: [[e.lon!, e.lat!], pos.get(e.id)!] },
+        properties: {},
+      })),
+  };
+  return { points, leaders };
 }
 
 export default function TheaterMap({ events, selectedId, onSelect }: Props) {
@@ -104,10 +134,15 @@ export default function TheaterMap({ events, selectedId, onSelect }: Props) {
           "circle-stroke-width": 2,
         },
       });
-      map.addSource("events", {
-        type: "geojson",
-        data: toGeoJSON(eventsRef.current),
+      const initial = toGeoJSON(eventsRef.current, map.getZoom());
+      map.addSource("leaders", { type: "geojson", data: initial.leaders });
+      map.addLayer({
+        id: "event-leaders",
+        type: "line",
+        source: "leaders",
+        paint: { "line-color": "#171712", "line-width": 0.8, "line-opacity": 0.6 },
       });
+      map.addSource("events", { type: "geojson", data: initial.points });
 
       // Every event stays individually visible with its serial number — no
       // clustering (proof-build convention; tight groups are displaced instead).
@@ -159,6 +194,13 @@ export default function TheaterMap({ events, selectedId, onSelect }: Props) {
 
       readyRef.current = true;
       syncData(map, eventsRef.current);
+      let lastZoom = map.getZoom();
+      map.on("zoomend", () => {
+        const z = map.getZoom();
+        if (Math.abs(z - lastZoom) < 0.25) return;
+        lastZoom = z;
+        syncData(map, eventsRef.current);
+      });
     });
 
     return () => {
@@ -183,7 +225,7 @@ export default function TheaterMap({ events, selectedId, onSelect }: Props) {
     const ev = selectedId ? events.find((e) => e.id === selectedId) : null;
     const src = map.getSource("selected") as maplibregl.GeoJSONSource | undefined;
     if (ev && ev.lat != null && ev.lon != null) {
-      const pos = displaced(events).get(ev.id)!;
+      const pos = displaced(events, map.getZoom()).get(ev.id)!;
       src?.setData({ type: "FeatureCollection", features: [{ type: "Feature", geometry: { type: "Point", coordinates: pos }, properties: {} }] });
       map.easeTo({ center: pos, zoom: Math.max(map.getZoom(), 5.6), duration: 500, padding: { left: 400 } });
     } else {
@@ -218,8 +260,10 @@ function syncData(map: maplibregl.Map, events: NumberedEvent[]) {
     );
   }
   void Promise.all(pending).then(() => {
+    const data = toGeoJSON(events, map.getZoom());
     const src = map.getSource("events") as maplibregl.GeoJSONSource | undefined;
-    src?.setData(toGeoJSON(events));
+    src?.setData(data.points);
+    (map.getSource("leaders") as maplibregl.GeoJSONSource | undefined)?.setData(data.leaders);
     // Fit once on first data; afterwards the analyst's pan/zoom is theirs.
     if (events.length > 0 && !fittedMaps.has(map)) {
       fittedMaps.add(map);
