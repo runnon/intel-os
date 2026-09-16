@@ -10,7 +10,7 @@ export default function EventDetail({ event, onClose }: { event: TheaterEvent; o
   return (
     <div className="border-t border-black/15 bg-[#fafafc] p-4 max-h-[50%] overflow-y-auto shrink-0">
       <div className="flex items-start justify-between gap-3">
-        <h3 className="headline text-base text-white">{event.title}</h3>
+        <h3 className="headline text-lg text-[#0b0b3b]">{event.title}</h3>
         <button onClick={onClose} className="font-mono text-xs text-black/55 hover:text-[#000057] shrink-0">
           ✕
         </button>
