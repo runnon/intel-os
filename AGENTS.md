@@ -50,11 +50,15 @@ Concretely, always verify:
    page and every export. No agency seals or official-looking serials, ever.
 8. **Multi-AOR ingest:** every cron cycle sweeps all six combatant commands
    (`worker/src/index.ts` loops `configuredAors`; override with an `AORS` csv env
-   var). Each AOR has its own curated gazetteer (`GAZETTEERS[aor]` in
-   `packages/core/src/gazetteer.ts`) and its own feed set + GDELT query
-   (`worker/src/feeds.ts`). Never geolocate one AOR's events against another's
-   gazetteer, and never add a gazetteer entry with unverified coordinates —
-   an uncurated place correctly renders as "position withheld".
+   var). All sources are fetched ONCE into a shared pool (`fetchGlobalPool`);
+   each command then selects its slice with `selectForAor` — its own regional
+   feed + GDELT hits are always kept, plus any pooled article matching that
+   AOR's gazetteer terms. So every theater mines the full source breadth, not
+   just its regional feeds. Each AOR has its own curated gazetteer
+   (`GAZETTEERS[aor]` in `packages/core/src/gazetteer.ts`) and its own regional
+   feeds + GDELT query (`worker/src/feeds.ts`). Never geolocate one AOR's events
+   against another's gazetteer, and never add a gazetteer entry with unverified
+   coordinates — an uncurated place correctly renders as "position withheld".
 
 ## Verification steps (run, don't assume)
 

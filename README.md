@@ -17,10 +17,13 @@ throughout the code are mapped in the conformance table below.
 
 ```
 worker/   Ingest loop (Railway, cron 0 */12 * * *): each cycle sweeps ALL six
-          AORs. Per AOR: shared public feeds (Al Jazeera, BBC World, UN News,
-          DoD releases, Defense One, gCaptain, Naval News) + regional feeds
-          (BBC desk feeds, France 24 regions) + a per-AOR GDELT sweep of
-          thousands of outlets → Claude extraction (reported facts only,
+          AORs. Every source is fetched ONCE into a shared pool — shared public
+          feeds (Al Jazeera, BBC World, UN News, DoD releases, Defense One,
+          gCaptain, Naval News), regional feeds (BBC desk feeds, France 24
+          regions), and all six per-AOR GDELT sweeps of thousands of outlets.
+          Each command then selects its slice of the whole pool (own-source hits
+          + articles matching its gazetteer terms), so every theater mines the
+          full source breadth → Claude extraction (reported facts only,
           attribution discipline) → dedup → geolocation validated against that
           AOR's curated gazetteer → publish situation update per AOR
 packages/core  Domain logic: event model, MIL-STD-2525E SIDC mapping, dedup,

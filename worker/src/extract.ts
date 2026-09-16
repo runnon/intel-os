@@ -66,7 +66,7 @@ export function makeClaudeExtractor(override?: { client: Anthropic | AnthropicBe
   const { client: anthropic, model } = override ?? makeModel();
   return async (articles, aor) => {
     if (articles.length === 0) return [];
-    const batch = articles.slice(0, 120).map((a, i) =>
+    const batch = articles.slice(0, 150).map((a, i) =>
       `[${i}] ${a.title}\n    outlet: ${a.outlet} | published: ${a.publishedAt}\n    url: ${a.url}${a.summary ? `\n    summary: ${a.summary}` : ''}`,
     ).join('\n');
 

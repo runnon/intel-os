@@ -1,6 +1,6 @@
 import { XMLParser } from 'fast-xml-parser';
 import type { Aor } from '@intel-os/core';
-import { AORS, assertPublicSource } from '@intel-os/core';
+import { AORS, GAZETTEERS, assertPublicSource } from '@intel-os/core';
 
 /** A raw article pulled from a public feed, pre-extraction. */
 export interface Article {
@@ -9,6 +9,16 @@ export interface Article {
   outlet: string;
   publishedAt: string; // ISO
   summary: string;
+}
+
+/**
+ * A pooled article carries the AORs whose *targeted* sources (regional feed or
+ * GDELT query) surfaced it. Every AOR's extraction draws from the same pool, so
+ * an article a regional feed missed can still reach a command via a broad
+ * source (Al Jazeera global, BBC World, DoD releases, another AOR's GDELT).
+ */
+export interface PooledArticle extends Article {
+  targetedFor: Aor[];
 }
 
 export type FeedFetcher = () => Promise<Article[]>;
@@ -155,37 +165,133 @@ async function fetchGdelt(query: string): Promise<Article[]> {
 }
 
 /**
- * Feed fetcher for one AOR: shared feeds + regional feeds + the AOR's GDELT
- * sweep. Partial feed failures are tolerated (one dead RSS host must not kill
- * the run) but total failure throws so AUTO-9 semantics apply upstream. Every
- * article passes the MARK-4 public-source guard.
+ * Fetch EVERY source once into one deduped pool: shared global feeds, all AORs'
+ * regional feeds, and all six GDELT queries. Each article is tagged with the
+ * AORs whose targeted sources surfaced it. Shared feeds (Al Jazeera global, BBC
+ * World, UN, DoD, Defense One, gCaptain, Naval News) carry no tag — they belong
+ * to every command via the relevance pass in selectForAor.
+ *
+ * Partial failures are tolerated (a dead host must not kill the cycle); total
+ * source failure throws so AUTO-9 applies. Every article passes the MARK-4
+ * public-source guard. A feed shared by two AORs (e.g. BBC Latin America) is
+ * fetched once and tagged for both.
  */
-export function makeFeedFetcher(aor: Aor): FeedFetcher {
-  return async () => {
-    const feeds = [...SHARED_FEEDS, ...AOR_FEEDS[aor]];
-    const results = await Promise.allSettled([
-      ...feeds.map((f) => fetchRss(f.url, f.outlet)),
-      fetchGdelt(GDELT_QUERIES[aor]),
-    ]);
-    const failed = results
-      .map((r, i) => (r.status === 'rejected' ? { feed: feeds[i]?.url ?? 'gdelt', reason: r.reason } : null))
-      .filter(Boolean);
-    for (const f of failed) console.warn(`[${aor}] feed failed: ${f!.feed}: ${f!.reason}`);
-    const ok = results.filter((r): r is PromiseFulfilledResult<Article[]> => r.status === 'fulfilled');
-    if (ok.length === 0) {
-      throw new Error(`all feeds failed for ${aor}: ${failed[0]?.reason}`);
+export async function fetchGlobalPool(): Promise<PooledArticle[]> {
+  // Build a fetch plan deduped by URL, tracking which AORs each feed serves.
+  const plan = new Map<string, { url: string; outlet: string; aors: Set<Aor> }>();
+  const addFeed = (url: string, outlet: string, aor?: Aor) => {
+    let e = plan.get(url);
+    if (!e) {
+      e = { url, outlet, aors: new Set() };
+      plan.set(url, e);
     }
-    const cutoff = Date.now() - MAX_ARTICLE_AGE_MS;
-    const articles = ok
-      .flatMap((r) => r.value)
-      .filter((a) => new Date(a.publishedAt).getTime() >= cutoff);
-    for (const a of articles) assertPublicSource(a.url);
-    // de-dupe by URL across feeds, newest first so batch truncation keeps fresh items
-    const seen = new Set<string>();
-    return articles
-      .filter((a) => (seen.has(a.url) ? false : (seen.add(a.url), true)))
-      .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
+    if (aor) e.aors.add(aor);
   };
+  for (const f of SHARED_FEEDS) addFeed(f.url, f.outlet);
+  for (const aor of AORS) for (const f of AOR_FEEDS[aor]) addFeed(f.url, f.outlet, aor);
+  const feeds = [...plan.values()].map((e) => ({ url: e.url, outlet: e.outlet, aors: [...e.aors] }));
+
+  const cutoff = Date.now() - MAX_ARTICLE_AGE_MS;
+  const pool = new Map<string, PooledArticle>();
+  let okSources = 0;
+
+  const ingest = (arts: Article[], aors: Aor[]) => {
+    for (const a of arts) {
+      if (new Date(a.publishedAt).getTime() < cutoff) continue;
+      try {
+        assertPublicSource(a.url);
+      } catch {
+        continue; // MARK-4: drop a non-public URL rather than fail the whole pool
+      }
+      const existing = pool.get(a.url);
+      if (existing) {
+        for (const aor of aors) if (!existing.targetedFor.includes(aor)) existing.targetedFor.push(aor);
+      } else {
+        pool.set(a.url, { ...a, targetedFor: [...aors] });
+      }
+    }
+  };
+
+  // RSS feeds concurrently.
+  const rss = await Promise.allSettled(feeds.map((f) => fetchRss(f.url, f.outlet)));
+  rss.forEach((r, i) => {
+    if (r.status === 'fulfilled') {
+      okSources++;
+      ingest(r.value, feeds[i].aors);
+    } else {
+      console.warn(`feed failed: ${feeds[i].url}: ${r.reason}`);
+    }
+  });
+
+  // GDELT queries sequentially so the module-level throttle actually spaces them.
+  for (const aor of AORS) {
+    try {
+      ingest(await fetchGdelt(GDELT_QUERIES[aor]), [aor]);
+      okSources++;
+    } catch (e) {
+      console.warn(`[${aor}] gdelt failed: ${e}`);
+    }
+  }
+
+  if (okSources === 0) throw new Error('global pool: all sources failed');
+  return [...pool.values()].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
+}
+
+// Per-AOR relevance keywords derived from that command's curated gazetteer
+// (place names, aliases, countries) — the same vocabulary that geolocates its
+// events. Matched with word boundaries so short names don't match substrings.
+const AOR_REGEX = new Map<Aor, RegExp>();
+function aorRegex(aor: Aor): RegExp {
+  let re = AOR_REGEX.get(aor);
+  if (re) return re;
+  // Terms too broad to be a useful relevance signal: they appear in most global
+  // reporting regardless of theater. Genuine events in these places still reach
+  // the command via its own regional feed + GDELT query (always kept).
+  const TOO_BROAD = new Set(['international', 'united states', 'united kingdom']);
+  const terms = new Set<string>();
+  for (const e of GAZETTEERS[aor]) {
+    for (const n of [e.name, ...e.aliases, e.country]) {
+      const t = n.trim();
+      if (t.length >= 4 && !TOO_BROAD.has(t.toLowerCase())) terms.add(t);
+    }
+  }
+  const escaped = [...terms].map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  re = new RegExp(`\\b(?:${escaped.join('|')})\\b`, 'gi');
+  AOR_REGEX.set(aor, re);
+  return re;
+}
+
+const SELECT_CAP = 150; // articles handed to one AOR's extraction
+
+/**
+ * Select this AOR's slice of the global pool. An article is a candidate if it
+ * came from one of the AOR's targeted sources OR mentions any of the AOR's
+ * gazetteer terms. Own-source articles rank first, then by keyword-match count,
+ * then recency — so the extraction budget goes to the most relevant reporting
+ * regardless of which source surfaced it.
+ */
+export function selectForAor(pool: PooledArticle[], aor: Aor): Article[] {
+  const re = aorRegex(aor);
+  const scored = pool
+    .map((a) => {
+      const own = a.targetedFor.includes(aor);
+      const score = (`${a.title} ${a.summary}`.match(re) ?? []).length;
+      return { a, own, score };
+    })
+    .filter((s) => s.own || s.score > 0);
+  scored.sort(
+    (x, y) =>
+      Number(y.own) - Number(x.own) ||
+      y.score - x.score ||
+      y.a.publishedAt.localeCompare(x.a.publishedAt),
+  );
+  return scored.slice(0, SELECT_CAP).map(({ a }) => ({
+    title: a.title,
+    url: a.url,
+    outlet: a.outlet,
+    publishedAt: a.publishedAt,
+    summary: a.summary,
+  }));
 }
 
 /** All ingest-enabled AORs; override with a comma-separated AORS env var. */

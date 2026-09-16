@@ -186,3 +186,38 @@ describe('configuredAors', () => {
     expect(() => configuredAors('SPACECOM')).toThrow();
   });
 });
+
+describe('selectForAor (shared source pool)', () => {
+  const mk = (over: Partial<import('../src/feeds').PooledArticle>): import('../src/feeds').PooledArticle => ({
+    title: 'x', url: `https://ex.com/${Math.random()}`, outlet: 'o',
+    publishedAt: '2026-09-16T00:00:00Z', summary: '', targetedFor: [], ...over,
+  });
+
+  it('routes a shared-feed article to a command by gazetteer keyword', async () => {
+    const { selectForAor } = await import('../src/feeds');
+    // An untagged (shared-feed) article mentioning Kyiv must reach EUCOM even
+    // though no EUCOM-targeted source produced it.
+    const pool = [mk({ title: 'Explosions reported near Kyiv overnight', targetedFor: [] })];
+    const eucom = selectForAor(pool, 'EUCOM');
+    expect(eucom.map((a) => a.title)).toContain('Explosions reported near Kyiv overnight');
+    // ...and must NOT be force-fed to an unrelated command.
+    expect(selectForAor(pool, 'SOUTHCOM')).toHaveLength(0);
+  });
+
+  it('always keeps an article from the AOR-targeted source even without keywords', async () => {
+    const { selectForAor } = await import('../src/feeds');
+    const pool = [mk({ title: 'Local council meeting', targetedFor: ['AFRICOM'] })];
+    expect(selectForAor(pool, 'AFRICOM')).toHaveLength(1);
+    expect(selectForAor(pool, 'EUCOM')).toHaveLength(0);
+  });
+
+  it('ranks own-source and higher keyword-match articles first', async () => {
+    const { selectForAor } = await import('../src/feeds');
+    const pool = [
+      mk({ url: 'https://ex.com/a', title: 'Taiwan Strait tension', targetedFor: [] }),
+      mk({ url: 'https://ex.com/b', title: 'Taiwan Strait and South China Sea drills near Philippines', targetedFor: ['INDOPACOM'] }),
+    ];
+    const out = selectForAor(pool, 'INDOPACOM');
+    expect(out[0].url).toBe('https://ex.com/b'); // own + more keyword hits
+  });
+});
