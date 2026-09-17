@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Markdown from "@/components/Markdown";
 
 interface Msg {
   role: "user" | "assistant";
@@ -82,11 +83,11 @@ export default function AnalystPage() {
               <div
                 className={
                   m.role === "user"
-                    ? "max-w-[85%] rounded-md bg-[#171712] text-white px-4 py-2.5 text-sm"
-                    : "max-w-full rounded-md border border-[#c9c2ac] bg-[#f5f2ea] px-4 py-3 text-sm whitespace-pre-wrap leading-relaxed"
+                    ? "max-w-[85%] rounded-md bg-[#171712] text-white px-4 py-2.5 text-sm whitespace-pre-wrap"
+                    : "max-w-full rounded-md border border-[#c9c2ac] bg-[#f5f2ea] px-4 py-3"
                 }
               >
-                {m.content}
+                {m.role === "assistant" ? <Markdown text={m.content} /> : m.content}
               </div>
             </div>
           ))}

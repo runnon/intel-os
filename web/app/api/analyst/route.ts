@@ -20,15 +20,26 @@ provided in this conversation. Rules, non-negotiable:
   judgement publishes only in a signed assessment product, and offer a facts-only
   summary instead.
 - Attribute discipline: keep each event's stated affiliation and confidence; never
-  upgrade "unknown" attribution. Flag single-source reporting as not confirmed.
-- Cite events by their serial numbers [n] and name the issue serial and info cut-off in
-  every draft. State clearly when data does not cover a question (e.g., an AOR with no
-  coverage) — never invent events.
+  upgrade "unknown" attribution. Flag single-source reporting as "single source — not
+  confirmed."
 - Begin every draft with the line: "MACHINE-GENERATED DRAFT — reported facts only, not a
-  published product, carries no analytic judgement."
-- Structure drafts like the proof-build sheet: a reported-facts overview by line of
-  effort or geography, per-event references, change-from-previous, and a source summary.
-Format in clean markdown.`;
+  published product, carries no analytic judgement." (as an italic line)
+- Then, for a specific-info request, lead with a one-line **BLUF** — a direct factual
+  answer to exactly what was asked — before the supporting detail.
+- Structure the body like the proof-build sheet: a reported-facts overview by geography
+  or line of effort, then the supporting events. For each event give the who/what/where/
+  when (place + country, Zulu time, affiliation, category), its confidence (origin/actor),
+  US impact if any, and CITE ITS SOURCES as markdown links using the outlet name and URL
+  provided, e.g. [BBC](https://…). Reference each event by its serial [n]. Never invent
+  events or sources; only use links present in the data.
+- Provenance & currency: name the issue serial and info cut-off, and state plainly what is
+  NOT covered (e.g. an AOR with no coverage, or a gap in the window) so the reader knows
+  the boundaries. Include a short change-from-previous note and a source-summary line.
+- Deep links: where a request maps to a theater, offer links to the live filtered view at
+  [/t/<aor>](/t/<aor>) and the briefable export sheet at [/t/<aor>/report](/t/<aor>/report)
+  (use the lowercase AOR, e.g. /t/centcom), so the reader can open the specific picture.
+- End with the marking line: "UNCLASSIFIED · OPEN SOURCES ONLY · NOT AN OFFICIAL GOVERNMENT PRODUCT".
+Format in clean GitHub-flavored markdown (headings, bold, bullet lists, links).`;
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -62,10 +73,14 @@ export async function POST(req: Request) {
         a.occurredAt.localeCompare(b.occurredAt),
       );
       const rows = asc
-        .map(
-          (e: Record<string, unknown>, idx: number) =>
-            `[${idx + 1}] ${e.occurredAt} | ${e.placeName}, ${e.country ?? "?"} | ${e.category} | affiliation:${e.affiliation} | conf:${e.confOrigin}/${e.confActor} | usForces:${e.usForcesFlag} | ${e.title} — ${e.summary}${e.usImpact ? ` | US impact: ${e.usImpact}` : ""} | sources:${(e.sources as unknown[])?.length ?? 0}`,
-        )
+        .map((e: Record<string, unknown>, idx: number) => {
+          const src = (e.sources as { outlet?: string; url?: string }[] | undefined) ?? [];
+          const srcList = src
+            .slice(0, 3)
+            .map((s) => `${s.outlet ?? "source"} <${s.url ?? ""}>`)
+            .join("; ");
+          return `[${idx + 1}] ${e.occurredAt} | ${e.placeName}, ${e.country ?? "?"} | ${e.category} | affiliation:${e.affiliation} | conf:${e.confOrigin}/${e.confActor} | usForces:${e.usForcesFlag} | ${e.title} — ${e.summary}${e.usImpact ? ` | US impact: ${e.usImpact}` : ""} | sources(${src.length}): ${srcList || "none"}`;
+        })
         .join("\n");
       return `=== ${i.aor} · ${i.serial} · window ${i.window_start} → cut-off ${i.info_cutoff} ===\n${rows || "(no events in window)"}\nSource summary: ${i.source_summary?.statement ?? "n/a"}`;
     })
