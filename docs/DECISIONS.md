@@ -278,3 +278,30 @@ open-source access, so X scraping means either a paid managed service or fragile
 account-based scrapers that violate ToS. Telegram + Bluesky give higher real-time
 OSINT value on genuinely open, free APIs. X can be added later behind the same
 corroboration gate if needed.
+
+## 2026-09-17 — Analyst subscription (Stripe) + Supabase Auth paywall
+
+Introduced the first paid tier: **Analyst, $20/mo or $190/yr**, gating the analyst
+drafting workspace (`/analyst`). Situation updates and the map stay free and public —
+the free/paid line follows the product's own architecture (AUTO-5 commodity situation
+data free; the drafting/assessment surface paid).
+
+Decisions:
+- **Auth:** added Supabase Auth (email magic-link) via `@supabase/ssr` — first auth in
+  the product. Self-hostable, no third-party CDN (NFR-4/5 safe). Prereq for a paywall,
+  since gating requires knowing who is subscribed.
+- **Payments:** existing shared Stripe account `acct_1SSUvpPzSHwImUes` (same account as
+  the other product). Isolated by `metadata app=intel-os` + a dedicated webhook; the
+  webhook ignores any event not tagged intel-os. Reviewed runnon's Stripe integration
+  first — it uses Supabase Edge Functions only because it's a server-less CRA; intel-os
+  is Next.js, so Stripe lives in `web/app/api/stripe/*` route handlers (same principle:
+  server-side only, key never in the client).
+- **Hosted Checkout** (redirect to checkout.stripe.com), not embedded — zero Stripe JS
+  in the app bundle, keeping the deployed surface CDN-free (NFR-4/5).
+- **Entitlement writes without a service-role key in Vercel:** the webhook writes via a
+  `SECURITY DEFINER` `grant_entitlement()` RPC that self-authorizes against a shared
+  secret in a private, RLS-locked `entitlement_admin` table. Honors the AGENTS.md rule
+  that the service-role key lives only in the worker.
+
+Re-entry path: for the eventual gov/NIPRNet deployment, billing is out of scope — that
+build is license/contract-gated with no Stripe surface at all. Setup: docs/STRIPE_SETUP.md.

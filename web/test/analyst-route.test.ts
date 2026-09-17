@@ -4,10 +4,12 @@ const mocks = vi.hoisted(() => ({
   createClient: vi.fn(),
   createMessage: vi.fn(),
   makeModel: vi.fn(),
+  hasActiveEntitlement: vi.fn(),
 }));
 
 vi.mock("@supabase/supabase-js", () => ({ createClient: mocks.createClient }));
 vi.mock("@/lib/model", () => ({ makeModel: mocks.makeModel }));
+vi.mock("@/lib/entitlement", () => ({ hasActiveEntitlement: mocks.hasActiveEntitlement }));
 
 import {
   DATA_TIMEOUT_MS,
@@ -71,6 +73,7 @@ beforeEach(() => {
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "public-anon-key");
   vi.spyOn(console, "info").mockImplementation(() => undefined);
   vi.spyOn(console, "error").mockImplementation(() => undefined);
+  mocks.hasActiveEntitlement.mockResolvedValue(true);
   mockIssueQuery([issue]);
   mocks.makeModel.mockReturnValue({
     client: { messages: { create: mocks.createMessage } },
@@ -108,6 +111,19 @@ describe("analyst route", () => {
 
     const alreadyMarked = `*${DRAFT_DISCLAIMER}*\n\nReported event.\n\n${MARKING_LINE}`;
     expect(enforceDraftMarkings(alreadyMarked)).toBe(alreadyMarked);
+  });
+
+  it("paywalls the drafting workspace without an active subscription", async () => {
+    mocks.hasActiveEntitlement.mockResolvedValue(false);
+
+    const response = await POST(analystRequest());
+
+    expect(response.status).toBe(402);
+    await expect(response.json()).resolves.toEqual({
+      error: "The analyst workspace requires an active subscription.",
+      code: "subscription_required",
+    });
+    expect(mocks.createMessage).not.toHaveBeenCalled();
   });
 
   it("returns a draft and bounds the model request below the function lifetime", async () => {

@@ -1,6 +1,7 @@
 import { makeModel } from "@/lib/model";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { hasActiveEntitlement } from "@/lib/entitlement";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -94,6 +95,16 @@ export function enforceDraftMarkings(text: string): string {
 
 export async function POST(req: Request) {
   const startedAt = Date.now();
+
+  // Paywall: the analyst drafting workspace is the Analyst-tier feature. Situation
+  // updates stay free; drafting requires an active subscription.
+  if (!(await hasActiveEntitlement())) {
+    return NextResponse.json(
+      { error: "The analyst workspace requires an active subscription.", code: "subscription_required" },
+      { status: 402 },
+    );
+  }
+
   let body: unknown;
   try {
     body = await req.json();
