@@ -1,4 +1,5 @@
 import type { Aor } from './types';
+import { GAZETTEERS, type GazetteerEntry } from './gazetteer';
 
 /**
  * Static, public-source geometry for linear infrastructure that cannot be
@@ -352,4 +353,102 @@ export function referencedLines(
   return lines.filter((line) =>
     [line.name, ...line.aliases].some((candidate) => hay.includes(candidate.toLowerCase())),
   );
+}
+
+// --- Context points of interest (airfields, ports, energy sites, cities) --------
+
+export type PoiCategory = 'airfield' | 'port' | 'energy' | 'city';
+
+export interface PointFeature {
+  name: string;
+  country: string;
+  lat: number;
+  lon: number;
+  category: PoiCategory;
+  kind: GazetteerEntry['kind'];
+  reason: 'named' | 'nearby'; // why this site is shown
+}
+
+// Which curated gazetteer kinds map to a drawable context category. `region`
+// centroids and chokepoints are deliberately excluded — they aren't point sites.
+const POI_CATEGORY: Partial<Record<GazetteerEntry['kind'], PoiCategory>> = {
+  base: 'airfield',
+  airport: 'airfield',
+  port: 'port',
+  refinery: 'energy',
+  nuclear: 'energy',
+  dam: 'energy',
+  facility: 'energy',
+  city: 'city',
+};
+
+export const POI_CATEGORIES: PoiCategory[] = ['airfield', 'port', 'energy', 'city'];
+export const POI_PROXIMITY_KM = 25; // show a site within this range of a plotted event
+const POI_COLOCATED_KM = 2; // a site this close to an event IS the event's own spot
+const POI_MAX = 60; // clutter backstop
+
+function haversineKm(aLat: number, aLon: number, bLat: number, bLon: number): number {
+  const R = 6371;
+  const dLat = ((bLat - aLat) * Math.PI) / 180;
+  const dLon = ((bLon - aLon) * Math.PI) / 180;
+  const la1 = (aLat * Math.PI) / 180;
+  const la2 = (bLat * Math.PI) / 180;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/**
+ * Curated context sites to draw beneath the event symbols: airfields, ports,
+ * energy sites and cities that are either NAMED by a current event or lie within
+ * POI_PROXIMITY_KM of a PLOTTED event. Same "mentioned → shown" discipline as
+ * referencedLines, plus a proximity rule so the sites around an incident are
+ * visible even when the report didn't name them. Never invents coordinates —
+ * every point is a hand-curated gazetteer entry. A site sitting on top of an
+ * event is skipped (the event symbol already marks that spot).
+ */
+export function referencedFeatures(
+  events: {
+    title?: string;
+    summary?: string;
+    placeName?: string;
+    lat?: number | null;
+    lon?: number | null;
+  }[],
+  aor: Aor,
+  categories: PoiCategory[] = POI_CATEGORIES,
+  proximityKm = POI_PROXIMITY_KM,
+): PointFeature[] {
+  const gaz = GAZETTEERS[aor] ?? [];
+  if (gaz.length === 0 || events.length === 0) return [];
+  const want = new Set(categories);
+  const hay = events
+    .map((e) => `${e.title ?? ''} ${e.summary ?? ''} ${e.placeName ?? ''}`)
+    .join(' \n ')
+    .toLowerCase();
+  const plotted = events.filter(
+    (e): e is typeof e & { lat: number; lon: number } => e.lat != null && e.lon != null,
+  );
+
+  const scored: { f: PointFeature; nearest: number }[] = [];
+  for (const e of gaz) {
+    const category = POI_CATEGORY[e.kind];
+    if (!category || !want.has(category)) continue;
+    const named = [e.name, ...e.aliases].some((c) => hay.includes(c.toLowerCase()));
+    let nearest = Infinity;
+    for (const p of plotted) {
+      const d = haversineKm(e.lat, e.lon, p.lat, p.lon);
+      if (d < nearest) nearest = d;
+    }
+    if (nearest <= POI_COLOCATED_KM) continue; // event symbol already marks this spot
+    if (!named && nearest > proximityKm) continue;
+    scored.push({
+      f: { name: e.name, country: e.country, lat: e.lat, lon: e.lon, category, kind: e.kind, reason: named ? 'named' : 'nearby' },
+      nearest,
+    });
+  }
+  // Named first, then closest — so the clutter cap keeps the most relevant sites.
+  scored.sort(
+    (a, b) => Number(b.f.reason === 'named') - Number(a.f.reason === 'named') || a.nearest - b.nearest,
+  );
+  return scored.slice(0, POI_MAX).map((s) => s.f);
 }

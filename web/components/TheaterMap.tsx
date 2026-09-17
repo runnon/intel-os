@@ -3,8 +3,36 @@
 import { useEffect, useRef } from "react";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import type { Aor, LineFeature, TheaterEvent } from "@intel-os/core";
-import { referencedLines } from "@intel-os/core";
+import type { Aor, LineFeature, PointFeature, TheaterEvent } from "@intel-os/core";
+import { referencedFeatures, referencedLines } from "@intel-os/core";
+
+// Context-site palette — muted, distinct from the MIL-STD affiliation colors so a
+// reference marker never reads as an event symbol. Shared by fill + label + legend.
+const POI_COLORS: Record<PointFeature["category"], string> = {
+  airfield: "#1f4e79",
+  port: "#2f7d8a",
+  energy: "#8a6100",
+  city: "#6b675c",
+};
+const POI_COLOR_MATCH = [
+  "match",
+  ["get", "category"],
+  "airfield",
+  POI_COLORS.airfield,
+  "port",
+  POI_COLORS.port,
+  "energy",
+  POI_COLORS.energy,
+  "city",
+  POI_COLORS.city,
+  POI_COLORS.city,
+] as unknown as maplibregl.DataDrivenPropertyValueSpecification<string>;
+const POI_LABELS: Record<PointFeature["category"], string> = {
+  airfield: "Airfield / air base",
+  port: "Port / naval facility",
+  energy: "Energy site",
+  city: "City",
+};
 import { symbolFor } from "@/lib/symbols";
 
 // NFR-4/NFR-5: MapLibre (BSD) + OpenStreetMap-derived vector tiles. No token, no
@@ -175,6 +203,70 @@ export default function TheaterMap({ events, selectedId, onSelect, forExport = f
         },
       });
 
+      // Curated context sites (airfields, ports, energy, cities) that a current
+      // event names or sits within ~25 km of. Small dimmed markers beneath the
+      // event symbols so they read as reference context, never as events.
+      map.addSource("infra-points", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      map.addLayer({
+        id: "infra-points",
+        type: "circle",
+        source: "infra-points",
+        paint: {
+          "circle-radius": ["match", ["get", "category"], "city", 3, 4.5],
+          "circle-color": POI_COLOR_MATCH,
+          "circle-opacity": 0.6,
+          "circle-stroke-color": "#f5f2ea",
+          "circle-stroke-width": 1.4,
+        },
+      });
+      map.addLayer({
+        id: "infra-point-labels",
+        type: "symbol",
+        source: "infra-points",
+        minzoom: 5.5,
+        layout: {
+          "text-field": ["get", "name"],
+          "text-size": 10,
+          "text-offset": [0, 1.1],
+          "text-anchor": "top",
+          "text-font": LABEL_FONT,
+          "text-optional": true,
+        },
+        paint: {
+          "text-color": POI_COLOR_MATCH,
+          "text-halo-color": "#f5f2ea",
+          "text-halo-width": 1.3,
+        },
+      });
+      const poiPopup = new maplibregl.Popup({
+        closeButton: false,
+        closeOnClick: false,
+        offset: 10,
+        className: "infrastructure-popup",
+      });
+      const showPoiPopup = (ev: maplibregl.MapLayerMouseEvent) => {
+        const p = ev.features?.[0]?.properties;
+        if (!p) return;
+        const card = document.createElement("div");
+        const name = document.createElement("strong");
+        const detail = document.createElement("span");
+        const src = document.createElement("small");
+        name.textContent = String(p.name);
+        detail.textContent = POI_LABELS[p.category as PointFeature["category"]] ?? "Site";
+        src.textContent = `${String(p.country)} · ${p.reason === "named" ? "named in reporting" : "near a plotted event"}`;
+        card.append(name, detail, src);
+        poiPopup.setLngLat(ev.lngLat).setDOMContent(card).addTo(map);
+      };
+      map.on("mouseenter", "infra-points", (ev) => {
+        map.getCanvas().style.cursor = "help";
+        showPoiPopup(ev);
+      });
+      map.on("mousemove", "infra-points", showPoiPopup);
+      map.on("mouseleave", "infra-points", () => {
+        map.getCanvas().style.cursor = "";
+        poiPopup.remove();
+      });
+
       map.addSource("selected", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
       map.addLayer({
         id: "selected-ring",
@@ -294,6 +386,7 @@ export default function TheaterMap({ events, selectedId, onSelect, forExport = f
 
       readyRef.current = true;
       const activeLines = syncInfraLines(map, refEventsRef.current);
+      syncInfraPoints(map, refEventsRef.current);
       fitToContent(map, eventsRef.current, activeLines, false, forExport);
       // Register the symbol images, then lay out (declutter) at the fitted view.
       void ensureImages(map, eventsRef.current).then(() =>
@@ -343,6 +436,7 @@ export default function TheaterMap({ events, selectedId, onSelect, forExport = f
     const map = mapRef.current;
     if (!map || !readyRef.current) return;
     syncInfraLines(map, referenceEvents ?? events);
+    syncInfraPoints(map, referenceEvents ?? events);
     if (forExport) fitToContent(map, events, referencedFor(referenceEvents ?? events), false, true);
     void ensureImages(map, events).then(() =>
       relayout(map, events, layoutRef.current, !forExport, selectedIdRef.current),
@@ -391,6 +485,23 @@ export default function TheaterMap({ events, selectedId, onSelect, forExport = f
 function referencedFor(refEvents: NumberedEvent[]): LineFeature[] {
   const aor = refEvents[0]?.aor as Aor | undefined;
   return aor ? referencedLines(refEvents, aor) : [];
+}
+
+// Draw the context sites (airfields/ports/energy/cities) referenced by the current
+// events — named, or within ~25 km of a plotted one.
+function syncInfraPoints(map: maplibregl.Map, refEvents: NumberedEvent[]): void {
+  const src = map.getSource("infra-points") as maplibregl.GeoJSONSource | undefined;
+  if (!src) return;
+  const aor = refEvents[0]?.aor as Aor | undefined;
+  const points: PointFeature[] = aor ? referencedFeatures(refEvents, aor) : [];
+  src.setData({
+    type: "FeatureCollection",
+    features: points.map((p) => ({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [p.lon, p.lat] },
+      properties: { name: p.name, country: p.country, category: p.category, kind: p.kind, reason: p.reason },
+    })),
+  });
 }
 
 // Draw the pipelines/shipping routes referenced by the current events

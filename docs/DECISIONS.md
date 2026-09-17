@@ -1,5 +1,24 @@
 # Decision Log
 
+## 2026-09-17 — Context sites (airfields/ports/energy/cities) on the map
+
+**Decision (Xavier):** Draw curated context points of interest — airfields/air bases,
+ports/naval facilities, energy sites, and cities — beneath the event symbols, so a
+reader sees the important places around an incident. Chosen trigger: a site shows when
+a current event NAMES it or when it lies within ~25 km of a PLOTTED event (all four
+categories enabled).
+
+**Implementation:** `referencedFeatures(events, aor)` in `packages/core/src/features.ts`
+— the point analog of `referencedLines`. It reads only the curated per-AOR gazetteer
+(never invents coordinates), maps gazetteer `kind` → category (base/airport→airfield,
+port→port, refinery/nuclear/dam/facility→energy, city→city), and returns sites that are
+named or within `POI_PROXIMITY_KM`. A site within 2 km of an event is skipped (the event
+symbol already marks that spot); results are capped at 60, named-first then nearest.
+`TheaterMap.tsx` renders them as small dimmed circle markers (category-colored) with
+labels above zoom 5.5 and a hover popup; the legend gains four swatches. Renders on both
+the live and report maps. Verified against live CENTCOM data (66 events → 6 sites incl.
+King Khalid Air Base); build + 68 tests green.
+
 ## 2026-09-17 — Geolocation: partial matches must be whole-word, not substring
 
 **Bug:** An event titled "US bases in the Gulf" (Persian Gulf, mis-selected into

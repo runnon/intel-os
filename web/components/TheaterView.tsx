@@ -259,8 +259,27 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
                 <span className="w-7 border-t-[2px] border-dashed border-[#1f4e79]" />
                 Shipping-network route
               </div>
+              {(
+                [
+                  ["#1f4e79", "Airfield / air base"],
+                  ["#2f7d8a", "Port / naval facility"],
+                  ["#8a6100", "Energy site"],
+                  ["#6b675c", "City"],
+                ] as const
+              ).map(([color, label]) => (
+                <div key={label} className="flex items-center gap-2 py-0.5">
+                  <span className="w-7 flex justify-center">
+                    <span
+                      className="inline-block w-[9px] h-[9px] rounded-full border border-[#f5f2ea]"
+                      style={{ backgroundColor: color, opacity: 0.7 }}
+                    />
+                  </span>
+                  {label}
+                </div>
+              ))}
               <p className="mt-1 max-w-[190px] leading-snug text-[#6b675c]">
-                Hover a line for source and accuracy.
+                Lines and sites appear when an event names them or occurs nearby. Hover
+                for detail.
               </p>
             </div>
           </div>
