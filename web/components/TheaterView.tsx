@@ -226,20 +226,20 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
           />
 
           {/* LEGEND doubles as the affiliation filter (proof-build block) */}
-          <div className="absolute top-3 right-3 z-10 bg-[#f5f2ea]/95 border border-[#171712] px-3 py-2">
-            <div className="font-mono text-[9px] tracking-[0.2em] text-[#6b675c] mb-1.5">LEGEND · CLICK TO FILTER</div>
+          <div className="absolute top-3 right-3 z-10 bg-[#f5f2ea]/95 border border-[#171712] px-2 py-1.5 font-mono">
+            <div className="text-[8px] tracking-[0.2em] text-[#6b675c] mb-1">LEGEND · CLICK TO FILTER</div>
             {AFF_META.map((a) => {
               const active = view.affiliations.length === 0 || view.affiliations.includes(a.key);
               return (
                 <button
                   key={a.key}
                   onClick={() => toggleAff(a.key)}
-                  className={`flex items-center gap-2 font-mono text-[10px] py-0.5 w-full text-left ${
+                  className={`flex items-center gap-1.5 text-[9px] py-[1px] w-full text-left ${
                     active ? "text-[#171712]" : "text-[#b7b1a0] line-through"
                   }`}
                 >
                   <span
-                    className="inline-block w-2.5 h-2.5 rotate-45"
+                    className="inline-block w-2 h-2 rotate-45 shrink-0"
                     style={{
                       backgroundColor: active ? a.fill : "transparent",
                       border: "1.5px solid rgba(10,14,18,0.9)",
@@ -250,14 +250,14 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
                 </button>
               );
             })}
-            <div className="mt-2 border-t border-[#c9c2ac] pt-2 font-mono text-[9px] text-[#514d43]">
-              <div className="flex items-center gap-2 py-0.5">
-                <span className="w-7 border-t-[2px] border-dashed border-[#8a6100]" />
+            <div className="mt-1.5 border-t border-[#c9c2ac] pt-1.5 text-[8px] text-[#514d43] space-y-[1px]">
+              <div className="flex items-center gap-1.5">
+                <span className="w-4 border-t-[2px] border-dashed border-[#8a6100] shrink-0" />
                 Mapped pipeline
               </div>
-              <div className="flex items-center gap-2 py-0.5">
-                <span className="w-7 border-t-[2px] border-dashed border-[#1f4e79]" />
-                Shipping-network route
+              <div className="flex items-center gap-1.5">
+                <span className="w-4 border-t-[2px] border-dashed border-[#1f4e79] shrink-0" />
+                Shipping route
               </div>
               {(
                 [
@@ -267,56 +267,44 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
                   ["#6b675c", "City"],
                 ] as const
               ).map(([color, label]) => (
-                <div key={label} className="flex items-center gap-2 py-0.5">
-                  <span className="w-7 flex justify-center">
-                    <span
-                      className="inline-block w-[9px] h-[9px] rounded-full border border-[#f5f2ea]"
-                      style={{ backgroundColor: color, opacity: 0.7 }}
-                    />
+                <div key={label} className="flex items-center gap-1.5">
+                  <span className="w-4 flex justify-center shrink-0">
+                    <span className="inline-block w-[7px] h-[7px] rounded-full" style={{ backgroundColor: color, opacity: 0.8 }} />
                   </span>
                   {label}
                 </div>
               ))}
-              <p className="mt-1 max-w-[190px] leading-snug text-[#6b675c]">
-                Lines and sites appear when an event names them or occurs nearby. Hover
-                for detail.
-              </p>
-              {(() => {
-                const aorKey = issue.aor as Aor;
-                const def = BLOCS[aorKey];
-                if (!def || def.blocs.length === 0) return null;
-                const hasContested = def.alignments.some((a) => a.certainty === "contested");
-                return (
-                  <div className="mt-2 border-t border-[#c9c2ac] pt-2">
-                    {def.blocs.map((b) => (
-                      <div key={b.key} className="flex items-center gap-2 py-0.5">
-                        <span
-                          className="inline-block w-4 h-3 border"
-                          style={{ backgroundColor: `${b.color}44`, borderColor: `${b.color}b0` }}
-                        />
-                        {b.label}
-                      </div>
-                    ))}
-                    {hasContested && (
-                      <div className="flex items-center gap-2 py-0.5">
-                        <span
-                          className="inline-block w-4 h-3 border border-[#6b675c]/60"
-                          style={{
-                            backgroundImage:
-                              "repeating-linear-gradient(45deg, rgba(90,86,78,0.7) 0 1px, transparent 1px 4px)",
-                          }}
-                        />
-                        Contested / uncertain
-                      </div>
-                    )}
-                    <p className="mt-1 max-w-[190px] leading-snug text-[#6b675c]">
-                      Declared alliance / bloc membership — political context, not an event
-                      affiliation and not a prediction.
-                    </p>
-                  </div>
-                );
-              })()}
+              <p className="text-[#6b675c] max-w-[150px] leading-tight pt-0.5">Named or near an event · hover for detail.</p>
             </div>
+            {(() => {
+              const aorKey = issue.aor as Aor;
+              const def = BLOCS[aorKey];
+              if (!def || def.blocs.length === 0) return null;
+              const hasContested = def.alignments.some((a) => a.certainty === "contested");
+              return (
+                <div className="mt-1.5 border-t border-[#c9c2ac] pt-1.5 text-[8px] text-[#514d43] space-y-[1px]">
+                  {def.blocs.map((b) => (
+                    <div key={b.key} className="flex items-center gap-1.5">
+                      <span
+                        className="inline-block w-3.5 h-2.5 shrink-0 border"
+                        style={{ backgroundColor: b.color, borderColor: "rgba(10,14,18,0.35)" }}
+                      />
+                      {b.label}
+                    </div>
+                  ))}
+                  {hasContested && (
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className="inline-block w-3.5 h-2.5 shrink-0 border border-[#6b675c]/50"
+                        style={{ backgroundImage: "repeating-linear-gradient(45deg, rgba(90,86,78,0.8) 0 1px, transparent 1px 3px)" }}
+                      />
+                      Contested / uncertain
+                    </div>
+                  )}
+                  <p className="text-[#6b675c] max-w-[150px] leading-tight pt-0.5">Declared membership — not affiliation, not a prediction.</p>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Selection callout — proof-build card docked over the map */}

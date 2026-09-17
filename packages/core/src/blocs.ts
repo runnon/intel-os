@@ -44,9 +44,11 @@ export interface AorBlocs {
   alignments: CountryAlignment[];
 }
 
-const SLATE = '#7d8794'; // US-aligned bloc family
-const RUST = '#9a6b5a'; // US-rival bloc family
-const TAUPE = '#a89078'; // regional body / other
+// Distinct muted hues — blue / orange / green so the three bloc families read apart
+// at a glance, while staying clear of the saturated MIL-STD affiliation colors.
+const SLATE = '#5b6fb0'; // US-aligned bloc family (indigo-blue)
+const RUST = '#b26a3d'; // US-rival bloc family (terracotta)
+const TAUPE = '#7d8a3c'; // regional body / other (olive)
 
 const NATO_MEMBERS = [
   'Albania', 'Belgium', 'Bulgaria', 'Croatia', 'Czechia', 'Denmark', 'Estonia',

@@ -172,7 +172,7 @@ export default function TheaterMap({ events, selectedId, onSelect, forExport = f
         type: "fill",
         source: "blocs",
         filter: ["==", ["get", "certainty"], "member"],
-        paint: { "fill-color": ["get", "color"], "fill-opacity": 0.18 },
+        paint: { "fill-color": ["get", "color"], "fill-opacity": 0.22 },
       });
       map.addLayer({
         id: "blocs-hatch",

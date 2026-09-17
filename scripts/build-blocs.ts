@@ -14,23 +14,62 @@ import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import { BLOCS } from '../packages/core/src/blocs';
 
-// 50m is the primary source — it tracks real borders closely enough to sit on the
-// OSM basemap; 110m was visibly too coarse. 10m is a fallback for any microstate 50m
-// might lack.
+// 10m is the primary source — the highest-resolution Natural Earth admin-0 set, so the
+// bloc polygons track real borders closely at theater zoom. (They are still a different
+// dataset from the OSM basemap, so they are close-but-not-pixel-exact when zoomed far in.)
 const NE_URL =
-  'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson';
-const NE_FALLBACK_URL =
   'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_0_countries.geojson';
+const NE_FALLBACK_URL =
+  'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson';
 const here = dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = resolve(here, '../web/public/geo');
-const CACHE = resolve(here, '../node_modules/.cache/ne_50m_admin_0_countries.geojson');
-const CACHE_FALLBACK = resolve(here, '../node_modules/.cache/ne_10m_admin_0_countries.geojson');
+const CACHE = resolve(here, '../node_modules/.cache/ne_10m_admin_0_countries.geojson');
+const CACHE_FALLBACK = resolve(here, '../node_modules/.cache/ne_50m_admin_0_countries.geojson');
 
-type Ring = number[];
-// ~110 m grid: imperceptible at theater zoom, keeps files small, borders stay clean.
+type Pt = [number, number];
 const round = (n: number) => Math.round(n * 1000) / 1000;
-const roundCoords = (c: unknown): unknown =>
-  Array.isArray((c as Ring[])[0]) ? (c as Ring[]).map(roundCoords) : [round((c as Ring)[0]), round((c as Ring)[1])];
+// Douglas-Peucker tolerance in degrees (~0.01° ≈ 1.1 km). 10m detail carries far more
+// coastline vertices than a faint political wash needs; simplifying preserves the border
+// SHAPE (unlike grid-rounding) while cutting file size dramatically. Endpoints (ring
+// closure) are always kept.
+const DP_TOL = 0.01;
+
+function perpDist(p: Pt, a: Pt, b: Pt): number {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  if (dx === 0 && dy === 0) return Math.hypot(p[0] - a[0], p[1] - a[1]);
+  const t = ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy);
+  return Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
+}
+function simplify(points: Pt[], tol: number): Pt[] {
+  if (points.length < 3) return points;
+  const keep = new Uint8Array(points.length);
+  keep[0] = keep[points.length - 1] = 1;
+  const stack: [number, number][] = [[0, points.length - 1]];
+  while (stack.length) {
+    const [s, e] = stack.pop()!;
+    let maxD = 0;
+    let idx = -1;
+    for (let i = s + 1; i < e; i++) {
+      const d = perpDist(points[i], points[s], points[e]);
+      if (d > maxD) { maxD = d; idx = i; }
+    }
+    if (maxD > tol && idx !== -1) {
+      keep[idx] = 1;
+      stack.push([s, idx], [idx, e]);
+    }
+  }
+  const out: Pt[] = [];
+  for (let i = 0; i < points.length; i++) if (keep[i]) out.push([round(points[i][0]), round(points[i][1])]);
+  return out;
+}
+function roundCoords(c: unknown): unknown {
+  const arr = c as unknown[];
+  if (Array.isArray(arr[0]) && typeof (arr[0] as unknown[])[0] === 'number') {
+    return simplify(arr as Pt[], DP_TOL); // this level is a ring of [lon,lat] points
+  }
+  return arr.map(roundCoords);
+}
 
 type NeDoc = { features: { properties: Record<string, unknown>; geometry: { type: string; coordinates: unknown } }[] };
 
