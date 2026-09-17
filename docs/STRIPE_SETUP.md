@@ -48,7 +48,29 @@ events: `checkout.session.completed`, `customer.subscription.updated`,
 ### 7. Vercel — env vars (project intel-os)
 Set: `NEXT_PUBLIC_SITE_URL`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`,
 `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_ANNUAL`, `ENTITLEMENT_GRANT_SECRET`
-(the same value as step 2). Redeploy.
+(the same value as step 2). To run the price A/B test, also set
+`STRIPE_PRICE_MONTHLY_B` + `STRIPE_PRICE_ANNUAL_B`. Redeploy.
+
+## Price A/B test ($10 vs $20)
+Each signed-in user is assigned a variant by a deterministic hash of their user id
+(50/50, server-side — see `web/lib/pricing.ts`), so their price is stable and can't be
+gamed from the client. The experiment is **live only when the `_B` price env vars are
+set**; otherwise everyone sees variant A ($20/$190).
+
+- Exposure (denominator) is logged once per user in `pricing_exposures`.
+- Conversion (numerator) is the `price_id` on their `entitlements` row.
+- Compare in Supabase, e.g.:
+  ```sql
+  select e.variant,
+         count(*) as exposed,
+         count(ent.user_id) filter (where ent.status in ('active','trialing')) as converted
+  from pricing_exposures e
+  left join entitlements ent on ent.user_id = e.user_id
+  group by e.variant;
+  ```
+- To restart with fresh buckets, bump `EXPERIMENT_SALT` in `web/lib/pricing.ts`.
+- The Billing Portal (cancel / update card / invoices) is auto-enabled on first use in
+  test mode; in live mode, activate it once under Settings → Billing → Customer portal.
 
 ## Local development
 `stripe listen --forward-to localhost:3000/api/stripe/webhook` and use the printed

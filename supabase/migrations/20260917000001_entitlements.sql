@@ -19,6 +19,7 @@ create table entitlements (
   stripe_customer_id text,
   stripe_subscription_id text,
   current_period_end timestamptz,
+  cancel_at_period_end boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -54,7 +55,8 @@ create or replace function grant_entitlement(
   p_price_id text,
   p_stripe_customer_id text,
   p_stripe_subscription_id text,
-  p_current_period_end timestamptz
+  p_current_period_end timestamptz,
+  p_cancel_at_period_end boolean
 ) returns void
 language plpgsql
 security definer
@@ -70,10 +72,12 @@ begin
 
   insert into entitlements as e (
     user_id, email, plan, status, price_id,
-    stripe_customer_id, stripe_subscription_id, current_period_end, updated_at
+    stripe_customer_id, stripe_subscription_id, current_period_end,
+    cancel_at_period_end, updated_at
   ) values (
     p_user_id, p_email, p_plan, p_status, p_price_id,
-    p_stripe_customer_id, p_stripe_subscription_id, p_current_period_end, now()
+    p_stripe_customer_id, p_stripe_subscription_id, p_current_period_end,
+    coalesce(p_cancel_at_period_end, false), now()
   )
   on conflict (user_id) do update set
     email = excluded.email,
@@ -83,10 +87,25 @@ begin
     stripe_customer_id = coalesce(excluded.stripe_customer_id, e.stripe_customer_id),
     stripe_subscription_id = excluded.stripe_subscription_id,
     current_period_end = excluded.current_period_end,
+    cancel_at_period_end = excluded.cancel_at_period_end,
     updated_at = now();
 end;
 $$;
 
 -- Only allow the anon/authenticated roles to EXECUTE the guarded function; nothing else.
-revoke all on function grant_entitlement(text, uuid, text, text, text, text, text, text, timestamptz) from public;
-grant execute on function grant_entitlement(text, uuid, text, text, text, text, text, text, timestamptz) to anon, authenticated;
+revoke all on function grant_entitlement(text, uuid, text, text, text, text, text, text, timestamptz, boolean) from public;
+grant execute on function grant_entitlement(text, uuid, text, text, text, text, text, text, timestamptz, boolean) to anon, authenticated;
+
+-- Price experiment exposure log: the denominator for A/B conversion. One row per user,
+-- written the first time they see the paywall pricing. The converting side is the
+-- price_id recorded on entitlements. A signed-in user may read/insert only their own row.
+create table pricing_exposures (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  variant text not null,
+  first_seen timestamptz not null default now()
+);
+alter table pricing_exposures enable row level security;
+create policy pricing_exposures_self_read on pricing_exposures
+  for select using (auth.uid() = user_id);
+create policy pricing_exposures_self_insert on pricing_exposures
+  for insert with check (auth.uid() = user_id);

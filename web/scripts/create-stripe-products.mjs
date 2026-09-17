@@ -18,8 +18,14 @@ if (!key) {
 const stripe = new Stripe(key);
 
 const APP = "intel-os";
-const MONTHLY_LOOKUP = "intel_os_analyst_monthly";
-const ANNUAL_LOOKUP = "intel_os_analyst_annual";
+// Variant A = control ($20/$190); Variant B = experiment ($10/$95). Set the B env vars
+// only when you want the A/B price test live (lib/pricing.ts falls back to A otherwise).
+const PRICES = [
+  { env: "STRIPE_PRICE_MONTHLY", lookup: "intel_os_analyst_monthly", amount: 2000, interval: "month", variant: "a" },
+  { env: "STRIPE_PRICE_ANNUAL", lookup: "intel_os_analyst_annual", amount: 19000, interval: "year", variant: "a" },
+  { env: "STRIPE_PRICE_MONTHLY_B", lookup: "intel_os_analyst_monthly_b", amount: 1000, interval: "month", variant: "b" },
+  { env: "STRIPE_PRICE_ANNUAL_B", lookup: "intel_os_analyst_annual_b", amount: 9500, interval: "year", variant: "b" },
+];
 
 async function ensureProduct() {
   const found = await stripe.products.search({
@@ -33,25 +39,26 @@ async function ensureProduct() {
   });
 }
 
-async function ensurePrice(productId, lookupKey, amount, interval) {
-  const existing = await stripe.prices.list({ lookup_keys: [lookupKey], active: true, limit: 1 });
+async function ensurePrice(productId, { lookup, amount, interval, variant }) {
+  const existing = await stripe.prices.list({ lookup_keys: [lookup], active: true, limit: 1 });
   if (existing.data[0]) return existing.data[0];
   return stripe.prices.create({
     product: productId,
     currency: "usd",
     unit_amount: amount,
     recurring: { interval },
-    lookup_key: lookupKey,
-    metadata: { app: APP, tier: "analyst" },
+    lookup_key: lookup,
+    metadata: { app: APP, tier: "analyst", variant },
   });
 }
 
 const product = await ensureProduct();
-const monthly = await ensurePrice(product.id, MONTHLY_LOOKUP, 2000, "month"); // $20/mo
-const annual = await ensurePrice(product.id, ANNUAL_LOOKUP, 19000, "year"); // $190/yr
 
 console.log("\n✓ Stripe objects ready (account-shared, tagged app=intel-os)\n");
 console.log(`Product:  ${product.id}  (${product.name})`);
 console.log(`\nAdd these to Vercel env (and web/.env.local for dev):\n`);
-console.log(`STRIPE_PRICE_MONTHLY=${monthly.id}`);
-console.log(`STRIPE_PRICE_ANNUAL=${annual.id}`);
+for (const spec of PRICES) {
+  const price = await ensurePrice(product.id, spec);
+  console.log(`${spec.env}=${price.id}`);
+}
+console.log(`\n(Set the _B vars only when you want the $10 vs $20 A/B test live.)`);

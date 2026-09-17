@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Markdown from "@/components/Markdown";
 import { requestAnalystDraft, type AnalystMessage } from "@/lib/analyst-client";
 
@@ -10,45 +10,112 @@ const SUGGESTIONS = [
   "What changed since the previous issue? Facts only.",
 ];
 
-type Gate = { loading: boolean; signedIn: boolean; active: boolean; email: string | null };
+type Gate = {
+  loading: boolean;
+  signedIn: boolean;
+  active: boolean;
+  email: string | null;
+  status: string;
+  plan: string | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+};
+
+const INITIAL_GATE: Gate = {
+  loading: true,
+  signedIn: false,
+  active: false,
+  email: null,
+  status: "none",
+  plan: null,
+  currentPeriodEnd: null,
+  cancelAtPeriodEnd: false,
+};
+
+const PAYMENT_ISSUE = new Set(["past_due", "unpaid", "incomplete"]);
+
+function fmtDate(iso: string | null): string {
+  if (!iso) return "";
+  return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
 
 export default function AnalystPage() {
   const [messages, setMessages] = useState<AnalystMessage[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [gate, setGate] = useState<Gate>({ loading: true, signedIn: false, active: false, email: null });
+  const [gate, setGate] = useState<Gate>(INITIAL_GATE);
+  const [prices, setPrices] = useState<{ monthly: string; annual: string } | null>(null);
   const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [activating, setActivating] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    fetch("/api/entitlement")
-      .then((r) => r.json())
-      .then((d) => setGate({ loading: false, signedIn: !!d.signedIn, active: !!d.active, email: d.email ?? null }))
-      .catch(() => setGate({ loading: false, signedIn: false, active: false, email: null }));
+  const refresh = useCallback(async (): Promise<boolean> => {
+    try {
+      const d = await fetch("/api/entitlement").then((r) => r.json());
+      const next: Gate = {
+        loading: false,
+        signedIn: !!d.signedIn,
+        active: !!d.active,
+        email: d.email ?? null,
+        status: d.status ?? "none",
+        plan: d.plan ?? null,
+        currentPeriodEnd: d.currentPeriodEnd ?? null,
+        cancelAtPeriodEnd: !!d.cancelAtPeriodEnd,
+      };
+      setGate(next);
+      return next.active;
+    } catch {
+      setGate((g) => ({ ...g, loading: false }));
+      return false;
+    }
   }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const paymentIssue = PAYMENT_ISSUE.has(gate.status);
+
+  // Signed in but not subscribed → load the user's A/B-assigned prices.
+  useEffect(() => {
+    if (gate.loading || !gate.signedIn || gate.active || paymentIssue || prices) return;
+    fetch("/api/pricing")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setPrices({ monthly: d.monthly.label, annual: d.annual.label }))
+      .catch(() => undefined);
+  }, [gate.loading, gate.signedIn, gate.active, paymentIssue, prices]);
+
+  // Returning from Checkout: the entitlement is granted asynchronously by the webhook,
+  // so poll briefly instead of showing the paywall to someone who just paid.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (new URLSearchParams(window.location.search).get("checkout") !== "success") return;
+    window.history.replaceState({}, "", "/analyst");
+    let cancelled = false;
+    let tries = 0;
+    setActivating(true);
+    const tick = async () => {
+      if (cancelled) return;
+      const active = await refresh();
+      tries += 1;
+      if (active || tries >= 8) {
+        setActivating(false);
+        return;
+      }
+      setTimeout(tick, 2000);
+    };
+    void tick();
+    return () => {
+      cancelled = true;
+    };
+  }, [refresh]);
 
   useEffect(() => {
     if (!busy) return;
     const timer = window.setInterval(() => setElapsedSeconds((seconds) => seconds + 1), 1_000);
     return () => window.clearInterval(timer);
   }, [busy]);
-
-  async function subscribe(plan: "monthly" | "annual") {
-    setCheckoutBusy(true);
-    try {
-      const res = await fetch("/api/stripe/checkout", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ plan }),
-      });
-      const data = await res.json();
-      if (data.url) window.location.href = data.url;
-      else setCheckoutBusy(false);
-    } catch {
-      setCheckoutBusy(false);
-    }
-  }
 
   async function send(text: string) {
     const content = text.trim();
@@ -69,6 +136,29 @@ export default function AnalystPage() {
     }
   }
 
+  async function redirectVia(endpoint: string, body?: unknown) {
+    setCheckoutBusy(true);
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const data = await res.json();
+      if (data.url) window.location.href = data.url;
+      else setCheckoutBusy(false);
+    } catch {
+      setCheckoutBusy(false);
+    }
+  }
+
+  const subscribe = (plan: "monthly" | "annual") => redirectVia("/api/stripe/checkout", { plan });
+  const manageBilling = () => redirectVia("/api/stripe/portal");
+
+  const planLabel = gate.plan ? `${gate.plan[0].toUpperCase()}${gate.plan.slice(1)}` : "Analyst";
+  const monthlyLabel = prices?.monthly ?? "$20 / month";
+  const annualLabel = prices?.annual ?? "$190 / year";
+
   return (
     <div className="flex-1 min-h-0 flex flex-col">
       <header className="border-b border-[#c9c2ac] px-4 py-2 flex flex-wrap items-center gap-x-5 gap-y-1 bg-[#efeadb] shrink-0">
@@ -81,91 +171,149 @@ export default function AnalystPage() {
         </span>
       </header>
 
-      {!gate.loading && !gate.active ? (
+      {gate.active && (
+        <div className="border-b border-[#c9c2ac] bg-[#f5f2ea] px-4 py-1.5 flex items-center gap-x-3 gap-y-1 flex-wrap font-mono text-[10px] text-[#6b675c] shrink-0">
+          <span>{gate.email}</span>
+          <span className="text-[#c9c2ac]">·</span>
+          <span>{planLabel}</span>
+          {gate.currentPeriodEnd && (
+            <span className={gate.cancelAtPeriodEnd ? "text-[#8a2f2f]" : ""}>
+              {gate.cancelAtPeriodEnd ? `cancels ${fmtDate(gate.currentPeriodEnd)}` : `renews ${fmtDate(gate.currentPeriodEnd)}`}
+            </span>
+          )}
+          <div className="ml-auto flex items-center gap-3">
+            <button
+              onClick={manageBilling}
+              disabled={checkoutBusy}
+              className="underline hover:text-[#8a6100] disabled:opacity-50"
+            >
+              Manage billing
+            </button>
+            <form action="/auth/signout" method="post">
+              <button type="submit" className="underline hover:text-[#8a6100]">Sign out</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {gate.loading ? (
+        <div className="flex-1 min-h-0 flex items-center justify-center">
+          <p className="font-mono text-xs text-[#6b675c]">Loading…</p>
+        </div>
+      ) : activating ? (
+        <div className="flex-1 min-h-0 flex items-center justify-center px-4">
+          <div className="text-center">
+            <p className="headline text-xl">Activating your subscription…</p>
+            <p className="text-sm text-black/60 mt-2">This takes a few seconds while the payment confirms.</p>
+          </div>
+        </div>
+      ) : !gate.active ? (
         <div className="flex-1 min-h-0 overflow-y-auto flex items-center justify-center px-4">
           <div className="w-full max-w-md border border-[#c9c2ac] bg-[#f5f2ea] p-6 text-center">
             <span className="tag">Analyst tier</span>
             <h2 className="headline text-2xl mt-3">Drafting workspace</h2>
-            <p className="text-sm text-black/70 mt-2 leading-relaxed">
-              The situation map and updates are free. The analyst drafting workspace —
-              facts-only report drafts over the published theater data — is a subscription.
-            </p>
-            {gate.signedIn ? (
-              <div className="mt-5 flex flex-col gap-2">
+            {paymentIssue ? (
+              <>
+                <p className="text-sm text-black/70 mt-2 leading-relaxed">
+                  Your subscription needs attention — the last payment didn&apos;t go through.
+                  Update your payment method to restore access.
+                </p>
                 <button
-                  onClick={() => subscribe("monthly")}
+                  onClick={manageBilling}
                   disabled={checkoutBusy}
-                  className="bg-[#171712] text-white text-sm font-semibold py-2.5 hover:bg-[#0b0b3b] disabled:opacity-50"
+                  className="mt-5 bg-[#8a2f2f] text-white text-sm font-semibold px-6 py-2.5 hover:opacity-90 disabled:opacity-50"
                 >
-                  {checkoutBusy ? "Redirecting…" : "Subscribe — $20 / month"}
+                  {checkoutBusy ? "Opening…" : "Update payment method"}
                 </button>
-                <button
-                  onClick={() => subscribe("annual")}
-                  disabled={checkoutBusy}
-                  className="border border-[#171712] text-[#171712] text-sm font-semibold py-2.5 hover:bg-[#eae4d2] disabled:opacity-50"
-                >
-                  Annual — $190 / year (2 months free)
-                </button>
-                <p className="font-mono text-[10px] text-[#6b675c] mt-2">
+                <p className="font-mono text-[10px] text-[#6b675c] mt-3">
                   Signed in as {gate.email} ·{" "}
                   <a href="/auth/signout" className="underline hover:text-[#8a6100]">sign out</a>
                 </p>
-              </div>
+              </>
             ) : (
-              <a
-                href="/signin?next=/analyst"
-                className="mt-5 inline-block bg-[#171712] text-white text-sm font-semibold px-6 py-2.5 hover:bg-[#0b0b3b]"
-              >
-                Sign in to subscribe
-              </a>
+              <>
+                <p className="text-sm text-black/70 mt-2 leading-relaxed">
+                  The situation map and updates are free. The analyst drafting workspace —
+                  facts-only report drafts over the published theater data — is a subscription.
+                </p>
+                {gate.signedIn ? (
+                  <div className="mt-5 flex flex-col gap-2">
+                    <button
+                      onClick={() => subscribe("monthly")}
+                      disabled={checkoutBusy}
+                      className="bg-[#171712] text-white text-sm font-semibold py-2.5 hover:bg-[#0b0b3b] disabled:opacity-50"
+                    >
+                      {checkoutBusy ? "Redirecting…" : `Subscribe — ${monthlyLabel}`}
+                    </button>
+                    <button
+                      onClick={() => subscribe("annual")}
+                      disabled={checkoutBusy}
+                      className="border border-[#171712] text-[#171712] text-sm font-semibold py-2.5 hover:bg-[#eae4d2] disabled:opacity-50"
+                    >
+                      Annual — {annualLabel} (2 months free)
+                    </button>
+                    <p className="font-mono text-[10px] text-[#6b675c] mt-2">
+                      Signed in as {gate.email} ·{" "}
+                      <a href="/auth/signout" className="underline hover:text-[#8a6100]">sign out</a>
+                    </p>
+                  </div>
+                ) : (
+                  <a
+                    href="/signin?next=/analyst"
+                    className="mt-5 inline-block bg-[#171712] text-white text-sm font-semibold px-6 py-2.5 hover:bg-[#0b0b3b]"
+                  >
+                    Sign in to subscribe
+                  </a>
+                )}
+              </>
             )}
           </div>
         </div>
       ) : (
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
-          {messages.length === 0 && (
-            <div className="border border-[#c9c2ac] rounded-md p-5 bg-[#efeadb]">
-              <p className="text-sm text-black/70 leading-relaxed">
-                Ask for report text over the published theater data. Drafts summarize reported
-                facts with sourcing caveats and cite event numbers — they carry no analytic
-                judgement (that publishes only over a named analyst&apos;s signature) and are
-                never part of the published record.
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
+            {messages.length === 0 && (
+              <div className="border border-[#c9c2ac] rounded-md p-5 bg-[#efeadb]">
+                <p className="text-sm text-black/70 leading-relaxed">
+                  Ask for report text over the published theater data. Drafts summarize reported
+                  facts with sourcing caveats and cite event numbers — they carry no analytic
+                  judgement (that publishes only over a named analyst&apos;s signature) and are
+                  never part of the published record.
+                </p>
+                <div className="mt-4 flex flex-col gap-2">
+                  {SUGGESTIONS.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => send(s)}
+                      className="text-left font-mono text-xs px-3 py-2 rounded-md border border-[#c9c2ac] hover:border-[#8f8a7c] hover:bg-[#eae4d2]"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {messages.map((m, i) => (
+              <div key={i} className={m.role === "user" ? "flex justify-end" : ""}>
+                <div
+                  className={
+                    m.role === "user"
+                      ? "max-w-[85%] rounded-md bg-[#171712] text-white px-4 py-2.5 text-sm whitespace-pre-wrap"
+                      : "max-w-full rounded-md border border-[#c9c2ac] bg-[#f5f2ea] px-4 py-3"
+                  }
+                >
+                  {m.role === "assistant" ? <Markdown text={m.content} /> : m.content}
+                </div>
+              </div>
+            ))}
+            {busy && (
+              <p className="font-mono text-xs text-[#6b675c]" role="status" aria-live="polite">
+                Drafting from published issues… {elapsedSeconds}s
               </p>
-              <div className="mt-4 flex flex-col gap-2">
-                {SUGGESTIONS.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => send(s)}
-                    className="text-left font-mono text-xs px-3 py-2 rounded-md border border-[#c9c2ac] hover:border-[#8f8a7c] hover:bg-[#eae4d2]"
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          {messages.map((m, i) => (
-            <div key={i} className={m.role === "user" ? "flex justify-end" : ""}>
-              <div
-                className={
-                  m.role === "user"
-                    ? "max-w-[85%] rounded-md bg-[#171712] text-white px-4 py-2.5 text-sm whitespace-pre-wrap"
-                    : "max-w-full rounded-md border border-[#c9c2ac] bg-[#f5f2ea] px-4 py-3"
-                }
-              >
-                {m.role === "assistant" ? <Markdown text={m.content} /> : m.content}
-              </div>
-            </div>
-          ))}
-          {busy && (
-            <p className="font-mono text-xs text-[#6b675c]" role="status" aria-live="polite">
-              Drafting from published issues… {elapsedSeconds}s
-            </p>
-          )}
-          <div ref={bottomRef} />
+            )}
+            <div ref={bottomRef} />
+          </div>
         </div>
-      </div>
       )}
 
       <div className="border-t border-[#c9c2ac] bg-[#efeadb] shrink-0">

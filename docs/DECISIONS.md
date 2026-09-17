@@ -325,3 +325,20 @@ Decisions:
 
 Re-entry path: for the eventual gov/NIPRNet deployment, billing is out of scope — that
 build is license/contract-gated with no Stripe surface at all. Setup: docs/STRIPE_SETUP.md.
+
+### 2026-09-17 — Analyst subscription, round 2: portal, lifecycle, price A/B
+
+Hardened the Analyst subscription into something operable:
+- **Billing portal** (`/api/stripe/portal`) — cancel, resume, update card, invoices.
+  Checkout blocks a duplicate subscription and routes an existing subscriber to the portal.
+- **Lifecycle states** — webhook now stores `cancel_at_period_end`; the account bar shows
+  "renews"/"cancels <date>"; a past_due/unpaid subscription gets a distinct "update your
+  payment method" prompt instead of the generic paywall.
+- **Post-checkout race** — the entitlement is granted asynchronously by the webhook, so
+  the page polls `/api/entitlement` (up to ~16s) showing "Activating…" rather than briefly
+  showing the paywall to someone who just paid.
+- **Price A/B test ($10 vs $20)** — deterministic 50/50 assignment by SHA-256 of the user
+  id (`web/lib/pricing.ts`), decided server-side so the charged price can't be gamed from
+  the client. Live only when the `_B` price env vars are set (else everyone gets $20).
+  Exposure logged in `pricing_exposures`; conversion is the `price_id` on `entitlements`.
+  Deliberately NOT PostHog/client analytics — self-contained, no third-party script (NFR-4/5).

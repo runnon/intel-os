@@ -14,16 +14,20 @@ export function stripe(): Stripe {
   return client;
 }
 
-// The Analyst tier's two recurring prices, isolated in the shared Stripe account by
-// metadata app=intel-os. Price IDs come from scripts/create-stripe-products.mjs.
+// The Analyst tier's billing cadence. The actual price id is chosen per-user by the
+// A/B experiment in lib/pricing.ts (server-authoritative). Price objects are isolated in
+// the shared Stripe account by metadata app=intel-os (scripts/create-stripe-products.mjs).
 export type Plan = "monthly" | "annual";
-
-export function priceFor(plan: Plan): string {
-  const id = plan === "annual" ? process.env.STRIPE_PRICE_ANNUAL : process.env.STRIPE_PRICE_MONTHLY;
-  if (!id) throw new Error(`Stripe price for '${plan}' plan is not configured`);
-  return id;
-}
 
 // Tags every intel-os object so the webhook (and reporting) can tell this product's
 // payments apart from the other product sharing the account.
 export const APP_TAG = "intel-os";
+
+/** A Stripe Billing Portal URL for an existing customer (cancel, update card, invoices). */
+export async function billingPortalUrl(customerId: string, returnUrl: string): Promise<string> {
+  const session = await stripe().billingPortal.sessions.create({
+    customer: customerId,
+    return_url: returnUrl,
+  });
+  return session.url;
+}

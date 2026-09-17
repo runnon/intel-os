@@ -66,6 +66,7 @@ async function syncSubscription(
     p_stripe_customer_id: customerId,
     p_stripe_subscription_id: sub.id,
     p_current_period_end: periodEnd(sub),
+    p_cancel_at_period_end: sub.cancel_at_period_end ?? false,
   });
   if (error) throw new Error(`grant_entitlement failed: ${error.message}`);
 }

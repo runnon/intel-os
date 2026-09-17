@@ -1,0 +1,57 @@
+import "server-only";
+import { createHash } from "node:crypto";
+import type { Plan } from "@/lib/stripe";
+
+// Price A/B experiment. A user's variant is a deterministic 50/50 split of their user id
+// (stable across sessions, decided server-side so the client can't pick the cheaper one).
+// Variant B is only live when its price IDs are configured; otherwise everyone gets A.
+export type PriceVariant = "a" | "b";
+
+type PlanInfo = { priceEnv: string; label: string; amount: number };
+
+const VARIANTS: Record<PriceVariant, Record<Plan, PlanInfo>> = {
+  a: {
+    monthly: { priceEnv: "STRIPE_PRICE_MONTHLY", label: "$20 / month", amount: 20 },
+    annual: { priceEnv: "STRIPE_PRICE_ANNUAL", label: "$190 / year", amount: 190 },
+  },
+  b: {
+    monthly: { priceEnv: "STRIPE_PRICE_MONTHLY_B", label: "$10 / month", amount: 10 },
+    annual: { priceEnv: "STRIPE_PRICE_ANNUAL_B", label: "$95 / year", amount: 95 },
+  },
+};
+
+// Bump this to re-randomize buckets for a fresh experiment.
+const EXPERIMENT_SALT = "pricing-experiment-2026-09";
+
+function rawVariant(userId: string): PriceVariant {
+  const digest = createHash("sha256").update(EXPERIMENT_SALT + userId).digest();
+  return (digest[0] & 1) === 0 ? "a" : "b";
+}
+
+/** True only when variant B's prices are configured — i.e. the experiment is running. */
+export function experimentLive(): boolean {
+  return Boolean(process.env.STRIPE_PRICE_MONTHLY_B && process.env.STRIPE_PRICE_ANNUAL_B);
+}
+
+/** The user's assigned variant, collapsing to 'a' whenever the experiment is off. */
+export function variantFor(userId: string): PriceVariant {
+  return experimentLive() ? rawVariant(userId) : "a";
+}
+
+/** The Stripe price id to actually charge — the authoritative server-side selection. */
+export function priceIdFor(userId: string, plan: Plan): string {
+  const variant = variantFor(userId);
+  const id = process.env[VARIANTS[variant][plan].priceEnv];
+  if (!id) throw new Error(`Stripe price for variant ${variant}/${plan} is not configured`);
+  return id;
+}
+
+/** Display labels for the paywall, for the user's assigned variant. */
+export function pricingDisplay(userId: string) {
+  const variant = variantFor(userId);
+  return {
+    variant,
+    monthly: { label: VARIANTS[variant].monthly.label, amount: VARIANTS[variant].monthly.amount },
+    annual: { label: VARIANTS[variant].annual.label, amount: VARIANTS[variant].annual.amount },
+  };
+}

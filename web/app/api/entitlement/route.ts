@@ -1,16 +1,25 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/supabase/server";
-import { hasActiveEntitlement } from "@/lib/entitlement";
+import { getEntitlement, isActive } from "@/lib/entitlement";
 
 export const runtime = "nodejs";
 
-// Lightweight status for the client: is the viewer signed in, and do they hold an
-// active Analyst subscription. Drives the sign-in / subscribe paywall on the page.
+// Status for the client: is the viewer signed in, do they hold an active Analyst
+// subscription, and the plan/renewal details that drive the account bar and paywall.
 export async function GET() {
   const user = await getSessionUser();
+  if (!user) {
+    return NextResponse.json({ signedIn: false, active: false });
+  }
+
+  const ent = await getEntitlement();
   return NextResponse.json({
-    signedIn: Boolean(user),
-    email: user?.email ?? null,
-    active: await hasActiveEntitlement(),
+    signedIn: true,
+    email: user.email ?? null,
+    active: isActive(ent),
+    status: ent?.status ?? "none",
+    plan: ent?.plan ?? null,
+    currentPeriodEnd: ent?.current_period_end ?? null,
+    cancelAtPeriodEnd: ent?.cancel_at_period_end ?? false,
   });
 }
