@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { Affiliation, Aor, EventCategory } from "@intel-os/core";
-import { BLOCS, IDENTITY_COLOR_LIGHT } from "@intel-os/core";
+import { AORS, BLOCS, IDENTITY_COLOR_LIGHT } from "@intel-os/core";
 import type { IssueRow } from "@/lib/db";
 import { applyView, decodeView, encodeView, type ViewState } from "@/lib/urlState";
 import TheaterMap, { type NumberedEvent } from "./TheaterMap";
@@ -142,6 +142,23 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
         >
           {issue.serial} · situation update
         </a>
+        <nav className="flex items-center gap-1 font-mono text-[10px]" aria-label="Switch command">
+          {AORS.map((a) => (
+            <a
+              key={a}
+              href={`/t/${a.toLowerCase()}`}
+              title={`Switch to ${a}`}
+              aria-current={a === issue.aor ? "page" : undefined}
+              className={`px-1.5 py-0.5 border ${
+                a === issue.aor
+                  ? "border-[#171712] bg-[#171712] text-[#f5f2ea]"
+                  : "border-[#c9c2ac] text-[#6b675c] hover:border-[#6b675c] hover:text-[#171712]"
+              }`}
+            >
+              {a}
+            </a>
+          ))}
+        </nav>
         <span className="font-mono text-[11px] text-[#8a6100] ml-auto">
           INFO CUT-OFF {zulu(issue.info_cutoff)}
         </span>
@@ -275,6 +292,20 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
                 </div>
               ))}
               <p className="text-[#6b675c] max-w-[150px] leading-tight pt-0.5">Named or near an event · hover for detail.</p>
+              {(
+                [
+                  ["friendly", "US / coalition base"],
+                  ["neutral", "Host-nation base"],
+                  ["hostile", "Adversary base"],
+                ] as const
+              ).map(([aff, label]) => (
+                <div key={label} className="flex items-center gap-1.5">
+                  <span className="w-4 flex justify-center shrink-0">
+                    <span className="inline-block w-[9px] h-[9px] border-2" style={{ borderColor: IDENTITY_COLOR_LIGHT[aff] }} />
+                  </span>
+                  {label}
+                </div>
+              ))}
             </div>
             {(() => {
               const aorKey = issue.aor as Aor;

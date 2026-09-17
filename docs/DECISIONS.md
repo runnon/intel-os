@@ -1,5 +1,25 @@
 # Decision Log
 
+## 2026-09-17 — Persistent installations layer + command switcher
+
+**Installations (Decision, Xavier):** Show the theater's curated bases *always* (not only
+when near an event) as MIL-STD-2525 **installation** symbols, framed by **operator**:
+`us` (US/coalition, friendly frame), `host` (allied/partner national base, neutral),
+`adversary` (strategic-competitor base, hostile), `unknown`. Operator is a public,
+open-source attribute (who is based there), not an assessment — untagged bases default to
+`host`, never to a US or adversary claim we haven't curated (`packages/core/installations.ts`,
+`installations(aor)`). Symbology uses milsymbol symbol-set 20 (Land Installations),
+generic entity `000000` → the frame + black installation amplifier, no interior icon, so
+it reads as an installation and stays distinct from the event frames (`installationSymbolFor`
+in `web/lib/symbols.ts`). Rendered beneath the event symbols on both live and report maps
+(`syncInstallations`), labels above zoom 6; legend gains three operator rows. Operator
+tags are a first pass (US/coalition, host, adversary) and are maintainer-tunable in one
+map. Follow-on: expand the base list and add distinct US-vs-coalition if wanted.
+
+**Command switcher (Decision, Xavier):** The masthead gained a one-click command switcher
+(all six AORs, current highlighted) linking to `/t/<aor>`, so you can move between theaters
+without editing the URL.
+
 ## 2026-09-17 — Alliance / bloc reference layer (all six commands)
 
 **Decision (Xavier):** Generalize the NATO shading into a per-command **bloc layer** so

@@ -3,8 +3,8 @@
 import { useEffect, useRef } from "react";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import type { Aor, LineFeature, PointFeature, TheaterEvent } from "@intel-os/core";
-import { referencedFeatures, referencedLines } from "@intel-os/core";
+import type { Aor, Installation, LineFeature, PointFeature, TheaterEvent } from "@intel-os/core";
+import { installations, referencedFeatures, referencedLines } from "@intel-os/core";
 
 // Context-site palette — muted, distinct from the MIL-STD affiliation colors so a
 // reference marker never reads as an event symbol. Shared by fill + label + legend.
@@ -33,7 +33,7 @@ const POI_LABELS: Record<PointFeature["category"], string> = {
   energy: "Energy site",
   city: "City",
 };
-import { symbolFor } from "@/lib/symbols";
+import { installationSymbolFor, symbolFor } from "@/lib/symbols";
 
 // NFR-4/NFR-5: MapLibre (BSD) + OpenStreetMap-derived vector tiles. No token, no
 // commercial tile service that can revoke access. Interim style is OpenFreeMap;
@@ -342,6 +342,31 @@ export default function TheaterMap({ events, selectedId, onSelect, forExport = f
         },
       });
 
+      // Persistent installations: curated bases as 2525 installation symbols,
+      // framed by operator (US/coalition, host-nation, adversary). Drawn beneath the
+      // event symbols so live incidents stay dominant. Populated by syncInstallations.
+      map.addSource("installations", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      map.addLayer({
+        id: "installation-symbols",
+        type: "symbol",
+        source: "installations",
+        layout: {
+          "icon-image": ["get", "sidc"],
+          "icon-size": 1,
+          "icon-allow-overlap": true,
+          "text-field": ["step", ["zoom"], "", 6, ["get", "name"]],
+          "text-size": 9,
+          "text-offset": [0, 1.5],
+          "text-optional": true,
+          "text-font": LABEL_FONT,
+        },
+        paint: {
+          "text-color": "#3a382e",
+          "text-halo-color": "#f5f2ea",
+          "text-halo-width": 1.2,
+        },
+      });
+
       map.addSource("events", {
         type: "geojson",
         data: toGeoJSON(eventsRef.current),
@@ -428,6 +453,7 @@ export default function TheaterMap({ events, selectedId, onSelect, forExport = f
       const activeLines = syncInfraLines(map, refEventsRef.current);
       syncInfraPoints(map, refEventsRef.current);
       syncBlocs(map, refEventsRef.current);
+      syncInstallations(map, refEventsRef.current);
       fitToContent(map, eventsRef.current, activeLines, false, forExport);
       // Register the symbol images, then lay out (declutter) at the fitted view.
       void ensureImages(map, eventsRef.current).then(() =>
@@ -479,6 +505,7 @@ export default function TheaterMap({ events, selectedId, onSelect, forExport = f
     syncInfraLines(map, referenceEvents ?? events);
     syncInfraPoints(map, referenceEvents ?? events);
     syncBlocs(map, referenceEvents ?? events);
+    syncInstallations(map, referenceEvents ?? events);
     if (forExport) fitToContent(map, events, referencedFor(referenceEvents ?? events), false, true);
     void ensureImages(map, events).then(() =>
       relayout(map, events, layoutRef.current, !forExport, selectedIdRef.current),
@@ -573,6 +600,41 @@ function syncBlocs(map: maplibregl.Map, refEvents: NumberedEvent[]): void {
   }
   void loadBlocs(aor).then((fc) => {
     (map.getSource("blocs") as maplibregl.GeoJSONSource | undefined)?.setData(fc);
+  });
+}
+
+// Persistent installations layer: curated bases as 2525 installation symbols framed
+// by operator. Independent of events — depends only on the theater.
+function syncInstallations(map: maplibregl.Map, refEvents: NumberedEvent[]): void {
+  const src = map.getSource("installations") as maplibregl.GeoJSONSource | undefined;
+  if (!src) return;
+  const aor = refEvents[0]?.aor as Aor | undefined;
+  const list: Installation[] = aor ? installations(aor) : [];
+  const pending: Promise<void>[] = [];
+  for (const op of new Set(list.map((i) => i.operator))) {
+    const { sidc, url, width, height } = installationSymbolFor(op);
+    if (map.hasImage(sidc)) continue;
+    pending.push(
+      new Promise((resolve) => {
+        const img = new Image(width, height);
+        img.onload = () => {
+          if (!map.hasImage(sidc)) map.addImage(sidc, img);
+          resolve();
+        };
+        img.onerror = () => resolve();
+        img.src = url;
+      }),
+    );
+  }
+  void Promise.all(pending).then(() => {
+    (map.getSource("installations") as maplibregl.GeoJSONSource | undefined)?.setData({
+      type: "FeatureCollection",
+      features: list.map((i) => ({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [i.lon, i.lat] },
+        properties: { sidc: installationSymbolFor(i.operator).sidc, name: i.name, operator: i.operator },
+      })),
+    });
   });
 }
 

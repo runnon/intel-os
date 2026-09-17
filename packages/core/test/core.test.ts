@@ -6,6 +6,7 @@ import {
   NORTHCOM_GAZETTEER,
   BLOCS,
   alignmentFor,
+  installations,
   dedupe,
   DISCLAIMER,
   eventSidc,
@@ -147,6 +148,22 @@ describe('alliance / bloc reference layer', () => {
     expect(alignmentFor('EUCOM', 'Poland')?.blocKey).toBe('nato');
     expect(alignmentFor('EUCOM', 'Ukraine')?.certainty).toBe('contested');
     expect(alignmentFor('EUCOM', 'Switzerland')).toBeNull();
+  });
+});
+
+describe('installations layer', () => {
+  it('returns curated bases framed by operator, defaulting to host-nation', () => {
+    const cen = installations('CENTCOM');
+    expect(cen.length).toBeGreaterThan(0);
+    const udeid = cen.find((i) => i.name === 'Al Udeid Air Base');
+    expect(udeid?.operator).toBe('us');
+    const nevatim = cen.find((i) => i.name === 'Nevatim Air Base');
+    expect(nevatim?.operator).toBe('host');
+    // Adversary base carries the hostile operator, not the host-nation default.
+    const engels = installations('EUCOM').find((i) => i.name === 'Engels Air Base');
+    expect(engels?.operator).toBe('adversary');
+    // Every installation carries real coordinates.
+    expect(cen.every((i) => Number.isFinite(i.lat) && Number.isFinite(i.lon))).toBe(true);
   });
 });
 
