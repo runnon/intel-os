@@ -1,5 +1,25 @@
 # Decision Log
 
+## 2026-09-17 — CENTCOM gains Israel / Palestinian Territories / Lebanon coverage
+
+**Decision (Xavier):** Add Israel, the Palestinian Territories (Gaza + West Bank), and
+Lebanon to CENTCOM ingest. Two compounding gaps had made this reporting invisible: the
+`CENTCOM_GAZETTEER` held no places there (so any extracted event resolved to "position
+withheld" per DATA-2/AUTO-3), and the CENTCOM GDELT query omitted Israel/Gaza/Hamas/IDF/
+West Bank/Lebanon terms (so `selectForAor` never pulled those articles into the slice).
+This was a curation gap, not an editorial choice.
+
+**Change:** Added hand-curated gazetteer entries with verified public coordinates
+(Jerusalem, Tel Aviv, Haifa, Beersheba, Nevatim AB; Gaza City, Rafah, Khan Yunis,
+Ramallah, Jenin, Gaza Strip, West Bank; Beirut, Tyre, Sidon, Nabatieh, Baalbek; plus
+Israel/Lebanon/Palestinian-Territories region centroids), and broadened the CENTCOM
+GDELT query with those actors/place terms.
+
+**Invariants held:** Israel has been in the CENTCOM AOR since 2021, so this is the
+correct theater. Coordinates are verified (gazetteer discipline — no unverified coords).
+Attribution stays neutral: contested/unclaimed resolves to `unknown` (DATA-4); nothing
+here defaults affiliation to hostile/friendly.
+
 ## 2026-09-15 — Mapbox is the mapping stack
 
 **Decision (Xavier):** Use Mapbox (Mapbox GL JS + Mapbox tiles/styles) for the theater view.

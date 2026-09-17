@@ -75,7 +75,7 @@ const AOR_FEEDS: Record<Aor, FeedDef[]> = {
 // "multiple points" net; the curated RSS feeds above anchor source quality.
 const GDELT_QUERIES: Record<Aor, string> = {
   CENTCOM:
-    '(Iran OR Houthi OR CENTCOM OR Yemen OR Syria OR Iraq OR Hezbollah OR IRGC OR "Persian Gulf" OR Hormuz OR "Red Sea" OR "Bab el-Mandeb") (strike OR airstrike OR missile OR drone OR attack OR intercept OR shelling OR seizure OR launch OR killed)',
+    '(Iran OR Houthi OR CENTCOM OR Yemen OR Syria OR Iraq OR Hezbollah OR IRGC OR Israel OR Gaza OR Hamas OR IDF OR "West Bank" OR Lebanon OR Palestinian OR "Persian Gulf" OR Hormuz OR "Red Sea" OR "Bab el-Mandeb") (strike OR airstrike OR missile OR drone OR attack OR intercept OR shelling OR seizure OR launch OR killed)',
   EUCOM:
     '(Ukraine OR Russia OR NATO OR Crimea OR Belarus OR Moldova OR "Black Sea" OR Kaliningrad OR "Baltic Sea" OR Zaporizhzhia) (strike OR airstrike OR missile OR drone OR offensive OR shelling OR sabotage OR incursion OR advance OR killed)',
   INDOPACOM:

@@ -95,6 +95,26 @@ export const CENTCOM_GAZETTEER: GazetteerEntry[] = [
   // Syria
   { name: 'Damascus', aliases: [], country: 'Syria', lat: 33.51, lon: 36.29, kind: 'city' },
   { name: 'Al Tanf', aliases: ['at tanf'], country: 'Syria', lat: 33.49, lon: 38.62, kind: 'base' },
+  // Israel (CENTCOM AOR since 2021)
+  { name: 'Jerusalem', aliases: [], country: 'Israel', lat: 31.78, lon: 35.21, kind: 'city' },
+  { name: 'Tel Aviv', aliases: ['tel aviv-yafo'], country: 'Israel', lat: 32.08, lon: 34.78, kind: 'city' },
+  { name: 'Haifa', aliases: [], country: 'Israel', lat: 32.82, lon: 34.99, kind: 'city' },
+  { name: 'Beersheba', aliases: ["be'er sheva", 'beer sheva'], country: 'Israel', lat: 31.25, lon: 34.79, kind: 'city' },
+  { name: 'Nevatim Air Base', aliases: ['nevatim'], country: 'Israel', lat: 31.208, lon: 35.012, kind: 'base' },
+  // Palestinian Territories
+  { name: 'Gaza City', aliases: ['gaza'], country: 'Palestinian Territories', lat: 31.5, lon: 34.46, kind: 'city' },
+  { name: 'Rafah', aliases: [], country: 'Palestinian Territories', lat: 31.29, lon: 34.25, kind: 'city' },
+  { name: 'Khan Yunis', aliases: ['khan younis'], country: 'Palestinian Territories', lat: 31.34, lon: 34.3, kind: 'city' },
+  { name: 'Ramallah', aliases: [], country: 'Palestinian Territories', lat: 31.9, lon: 35.21, kind: 'city' },
+  { name: 'Jenin', aliases: [], country: 'Palestinian Territories', lat: 32.46, lon: 35.3, kind: 'city' },
+  { name: 'Gaza Strip', aliases: [], country: 'Palestinian Territories', lat: 31.42, lon: 34.35, kind: 'region' },
+  { name: 'West Bank', aliases: [], country: 'Palestinian Territories', lat: 31.95, lon: 35.25, kind: 'region' },
+  // Lebanon (Hezbollah front)
+  { name: 'Beirut', aliases: [], country: 'Lebanon', lat: 33.89, lon: 35.5, kind: 'city' },
+  { name: 'Tyre', aliases: ['sour'], country: 'Lebanon', lat: 33.27, lon: 35.2, kind: 'city' },
+  { name: 'Sidon', aliases: ['saida'], country: 'Lebanon', lat: 33.56, lon: 35.38, kind: 'city' },
+  { name: 'Nabatieh', aliases: [], country: 'Lebanon', lat: 33.38, lon: 35.48, kind: 'city' },
+  { name: 'Baalbek', aliases: [], country: 'Lebanon', lat: 34.0, lon: 36.21, kind: 'city' },
   // Chokepoints / waterways
   { name: 'Strait of Hormuz', aliases: ['hormuz'], country: 'International', lat: 26.57, lon: 56.25, kind: 'chokepoint' },
   { name: 'Bab al-Mandeb', aliases: ['bab el-mandeb', 'bab al mandab'], country: 'International', lat: 12.58, lon: 43.33, kind: 'chokepoint' },
@@ -114,6 +134,9 @@ export const CENTCOM_GAZETTEER: GazetteerEntry[] = [
   { name: 'UAE', aliases: ['united arab emirates'], country: 'UAE', lat: 23.9, lon: 54.3, kind: 'region' },
   { name: 'Oman', aliases: [], country: 'Oman', lat: 21.0, lon: 57.0, kind: 'region' },
   { name: 'Syria', aliases: [], country: 'Syria', lat: 35.0, lon: 38.5, kind: 'region' },
+  { name: 'Israel', aliases: [], country: 'Israel', lat: 31.4, lon: 34.9, kind: 'region' },
+  { name: 'Lebanon', aliases: [], country: 'Lebanon', lat: 33.85, lon: 35.85, kind: 'region' },
+  { name: 'Palestinian Territories', aliases: ['palestine'], country: 'Palestinian Territories', lat: 31.7, lon: 35.1, kind: 'region' },
   // infrastructure / special features
   { name: 'East-West Pipeline', aliases: ['petroline', 'east-west crude pipeline', 'east west pipeline'], country: 'Saudi Arabia', lat: 25.0, lon: 45.0, kind: 'pipeline' },
   { name: 'Ras Tanura', aliases: ['ras tanura terminal'], country: 'Saudi Arabia', lat: 26.64, lon: 50.16, kind: 'refinery' },
