@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
 import { stripe, APP_TAG } from "@/lib/stripe";
+import { variantOfPrice } from "@/lib/pricing";
+import { track } from "@/lib/analytics";
 
 export const runtime = "nodejs";
 
@@ -96,11 +98,30 @@ export async function POST(request: Request) {
           userId: session.client_reference_id,
           email: session.customer_details?.email ?? session.customer_email,
         });
+        const userId = sub.metadata?.supabase_user_id ?? session.client_reference_id;
+        const priceId = sub.items.data[0]?.price.id ?? null;
+        if (userId) {
+          await track(userId, "subscribed", {
+            plan: planForPrice(priceId),
+            variant: variantOfPrice(priceId),
+            price_id: priceId,
+          });
+        }
         break;
       }
-      case "customer.subscription.updated":
-      case "customer.subscription.deleted": {
+      case "customer.subscription.updated": {
         await syncSubscription(event.data.object as Stripe.Subscription);
+        break;
+      }
+      case "customer.subscription.deleted": {
+        const sub = event.data.object as Stripe.Subscription;
+        await syncSubscription(sub);
+        const userId = sub.metadata?.supabase_user_id;
+        if (userId && sub.metadata?.app === APP_TAG) {
+          await track(userId, "subscription_canceled", {
+            plan: planForPrice(sub.items.data[0]?.price.id ?? null),
+          });
+        }
         break;
       }
       default:

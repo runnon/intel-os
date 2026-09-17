@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSessionUser, createSupabaseServerClient } from "@/lib/supabase/server";
 import { stripe, billingPortalUrl, APP_TAG, type Plan } from "@/lib/stripe";
-import { priceIdFor } from "@/lib/pricing";
+import { priceIdFor, variantFor } from "@/lib/pricing";
+import { track } from "@/lib/analytics";
 
 export const runtime = "nodejs";
 
@@ -40,6 +41,8 @@ export async function POST(request: Request) {
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
+
+  await track(user.id, "checkout_started", { plan, variant: variantFor(user.id) });
 
   const meta = { app: APP_TAG, supabase_user_id: user.id };
 

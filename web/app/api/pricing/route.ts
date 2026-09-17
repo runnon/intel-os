@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionUser, createSupabaseServerClient } from "@/lib/supabase/server";
 import { pricingDisplay } from "@/lib/pricing";
+import { track } from "@/lib/analytics";
 
 export const runtime = "nodejs";
 
@@ -14,15 +15,19 @@ export async function GET() {
 
   const pricing = pricingDisplay(user.id);
 
-  // Record first exposure; idempotent (primary key on user_id), best-effort.
+  // Record first exposure; the primary key makes it idempotent. A row with no error is a
+  // NEW exposure, so fire the analytics event only then (keeps pricing_viewed one-per-user).
   const supabase = await createSupabaseServerClient();
-  await supabase
+  const { error } = await supabase
     .from("pricing_exposures")
-    .insert({ user_id: user.id, variant: pricing.variant })
-    .then(
-      () => undefined,
-      () => undefined, // already exposed, or transient — never block the paywall
-    );
+    .insert({ user_id: user.id, variant: pricing.variant });
+  if (!error) {
+    await track(user.id, "pricing_viewed", {
+      variant: pricing.variant,
+      monthly_amount: pricing.monthly.amount,
+      annual_amount: pricing.annual.amount,
+    });
+  }
 
   return NextResponse.json(pricing);
 }

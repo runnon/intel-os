@@ -46,6 +46,14 @@ export function priceIdFor(userId: string, plan: Plan): string {
   return id;
 }
 
+/** Which experiment variant a Stripe price id belongs to (what the user actually paid). */
+export function variantOfPrice(priceId: string | null): PriceVariant | null {
+  if (!priceId) return null;
+  if (priceId === process.env.STRIPE_PRICE_MONTHLY || priceId === process.env.STRIPE_PRICE_ANNUAL) return "a";
+  if (priceId === process.env.STRIPE_PRICE_MONTHLY_B || priceId === process.env.STRIPE_PRICE_ANNUAL_B) return "b";
+  return null;
+}
+
 /** Display labels for the paywall, for the user's assigned variant. */
 export function pricingDisplay(userId: string) {
   const variant = variantFor(userId);
