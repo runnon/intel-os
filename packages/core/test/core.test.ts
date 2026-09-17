@@ -4,6 +4,8 @@ import {
   buildSituationUpdate,
   CENTCOM_GAZETTEER,
   NORTHCOM_GAZETTEER,
+  BLOCS,
+  alignmentFor,
   dedupe,
   DISCLAIMER,
   eventSidc,
@@ -120,6 +122,31 @@ describe('gazetteer / geolocate (DATA-2, AUTO-3)', () => {
   it('gazetteer has no duplicate normalized names', () => {
     const names = CENTCOM_GAZETTEER.map((g) => g.name.toLowerCase());
     expect(new Set(names).size).toBe(names.length);
+  });
+});
+
+describe('alliance / bloc reference layer', () => {
+  const AFFILIATION_HUES = new Set(['#a02c2c', '#1f4e79', '#1a7f37', '#b08800']);
+
+  it('every alignment references a bloc defined in its AOR, and colors avoid affiliation hues', () => {
+    for (const [aor, def] of Object.entries(BLOCS)) {
+      const keys = new Set(def.blocs.map((b) => b.key));
+      for (const b of def.blocs) {
+        expect(AFFILIATION_HUES.has(b.color.toLowerCase()), `${aor}/${b.key} reuses an affiliation color`).toBe(false);
+      }
+      for (const a of def.alignments) {
+        expect(keys.has(a.blocKey), `${aor}: ${a.country} → undefined bloc ${a.blocKey}`).toBe(true);
+        expect(a.basis.length, `${aor}: ${a.country} needs a factual basis`).toBeGreaterThan(0);
+      }
+      const dupes = def.alignments.map((a) => a.country);
+      expect(new Set(dupes).size, `${aor} lists a country twice`).toBe(dupes.length);
+    }
+  });
+
+  it('alignmentFor resolves a curated country and returns null otherwise', () => {
+    expect(alignmentFor('EUCOM', 'Poland')?.blocKey).toBe('nato');
+    expect(alignmentFor('EUCOM', 'Ukraine')?.certainty).toBe('contested');
+    expect(alignmentFor('EUCOM', 'Switzerland')).toBeNull();
   });
 });
 

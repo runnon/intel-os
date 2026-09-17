@@ -27,11 +27,6 @@ const POI_COLOR_MATCH = [
   POI_COLORS.city,
   POI_COLORS.city,
 ] as unknown as maplibregl.DataDrivenPropertyValueSpecification<string>;
-// Slate wash for NATO member states — a neutral blue-gray held well clear of the
-// affiliation hues (hostile red / friendly blue / neutral green / unknown yellow)
-// so an alliance overlay never reads as an event affiliation.
-const NATO_TINT = "#7d8794";
-
 const POI_LABELS: Record<PointFeature["category"], string> = {
   airfield: "Airfield / air base",
   port: "Port / naval facility",
@@ -161,23 +156,44 @@ export default function TheaterMap({ events, selectedId, onSelect, forExport = f
     map.on("style.load", () => {
       recolorToPrint(map);
 
-      // NATO member states (EUCOM only): a faint slate wash + thin border, drawn
-      // beneath everything else. Deliberately NEUTRAL vs the MIL-STD affiliation
-      // palette — this is political context (who is in the alliance), never a
-      // claim that events here are "friendly". Public-domain Natural Earth
-      // geometry ships as a same-origin static asset (NFR-4/NFR-5 safe).
-      map.addSource("nato", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      // Alliance / bloc layer (per command): declared membership as a faint tint,
+      // drawn beneath everything else. Colors come from the curated bloc table and
+      // are held NEUTRAL vs the MIL-STD affiliation palette — this is political
+      // context (who is in which bloc), never a claim that events here are
+      // "friendly", and never a prediction. Confirmed members get a solid wash +
+      // border; genuinely contested/uncertain alignment gets a diagonal HATCH +
+      // dashed border. Public-domain Natural Earth geometry joined to the bloc
+      // table ships as same-origin static assets (NFR-4/NFR-5 safe).
+      const hatch = makeHatch();
+      if (hatch && !map.hasImage("bloc-hatch")) map.addImage("bloc-hatch", hatch);
+      map.addSource("blocs", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
       map.addLayer({
-        id: "nato-fill",
+        id: "blocs-fill",
         type: "fill",
-        source: "nato",
-        paint: { "fill-color": NATO_TINT, "fill-opacity": 0.16 },
+        source: "blocs",
+        filter: ["==", ["get", "certainty"], "member"],
+        paint: { "fill-color": ["get", "color"], "fill-opacity": 0.18 },
       });
       map.addLayer({
-        id: "nato-border",
+        id: "blocs-hatch",
+        type: "fill",
+        source: "blocs",
+        filter: ["==", ["get", "certainty"], "contested"],
+        paint: { "fill-pattern": "bloc-hatch", "fill-opacity": 0.85 },
+      });
+      map.addLayer({
+        id: "blocs-border",
         type: "line",
-        source: "nato",
-        paint: { "line-color": NATO_TINT, "line-width": 0.6, "line-opacity": 0.55 },
+        source: "blocs",
+        filter: ["==", ["get", "certainty"], "member"],
+        paint: { "line-color": ["get", "color"], "line-width": 0.6, "line-opacity": 0.5 },
+      });
+      map.addLayer({
+        id: "blocs-border-contested",
+        type: "line",
+        source: "blocs",
+        filter: ["==", ["get", "certainty"], "contested"],
+        paint: { "line-color": ["get", "color"], "line-width": 0.9, "line-opacity": 0.7, "line-dasharray": [2, 1.5] },
       });
 
       // Public-source linear infrastructure, drawn beneath event symbols. A pale
@@ -411,7 +427,7 @@ export default function TheaterMap({ events, selectedId, onSelect, forExport = f
       readyRef.current = true;
       const activeLines = syncInfraLines(map, refEventsRef.current);
       syncInfraPoints(map, refEventsRef.current);
-      syncNato(map, refEventsRef.current);
+      syncBlocs(map, refEventsRef.current);
       fitToContent(map, eventsRef.current, activeLines, false, forExport);
       // Register the symbol images, then lay out (declutter) at the fitted view.
       void ensureImages(map, eventsRef.current).then(() =>
@@ -462,7 +478,7 @@ export default function TheaterMap({ events, selectedId, onSelect, forExport = f
     if (!map || !readyRef.current) return;
     syncInfraLines(map, referenceEvents ?? events);
     syncInfraPoints(map, referenceEvents ?? events);
-    syncNato(map, referenceEvents ?? events);
+    syncBlocs(map, referenceEvents ?? events);
     if (forExport) fitToContent(map, events, referencedFor(referenceEvents ?? events), false, true);
     void ensureImages(map, events).then(() =>
       relayout(map, events, layoutRef.current, !forExport, selectedIdRef.current),
@@ -513,27 +529,50 @@ function referencedFor(refEvents: NumberedEvent[]): LineFeature[] {
   return aor ? referencedLines(refEvents, aor) : [];
 }
 
-// NATO member states — shaded on the EUCOM map only. Geometry is fetched once from
-// a same-origin static asset (public-domain Natural Earth) and cached.
-let natoData: Promise<GeoJSON.FeatureCollection> | null = null;
-function loadNato(): Promise<GeoJSON.FeatureCollection> {
-  if (!natoData) {
-    natoData = fetch("/geo/nato-eucom.geojson")
-      .then((r) => (r.ok ? (r.json() as Promise<GeoJSON.FeatureCollection>) : Promise.reject(new Error(String(r.status)))))
-      .catch(() => EMPTY_FC); // fail quiet — the theater still renders without the wash
-  }
-  return natoData;
+// Diagonal hatch tile for 'contested' bloc areas — self-contained (no sprite/asset),
+// so uncertain alignment reads visually distinct from a solid membership wash.
+function makeHatch(): ImageData | null {
+  if (typeof document === "undefined") return null;
+  const s = 8;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = s;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.strokeStyle = "rgba(90,86,78,0.8)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  // three parallel diagonals so the 8px tile repeats seamlessly
+  ctx.moveTo(0, s); ctx.lineTo(s, 0);
+  ctx.moveTo(-s / 2, s / 2); ctx.lineTo(s / 2, -s / 2);
+  ctx.moveTo(s / 2, s * 1.5); ctx.lineTo(s * 1.5, s / 2);
+  ctx.stroke();
+  return ctx.getImageData(0, 0, s, s);
 }
-function syncNato(map: maplibregl.Map, refEvents: NumberedEvent[]): void {
-  const src = map.getSource("nato") as maplibregl.GeoJSONSource | undefined;
+
+// Alliance / bloc layer — per-AOR declared membership. Geometry (public-domain
+// Natural Earth joined to the curated bloc table) is fetched once per AOR from a
+// same-origin static asset and cached; fails quiet so the theater still renders.
+const blocCache = new Map<string, Promise<GeoJSON.FeatureCollection>>();
+function loadBlocs(aor: string): Promise<GeoJSON.FeatureCollection> {
+  let p = blocCache.get(aor);
+  if (!p) {
+    p = fetch(`/geo/blocs-${aor.toLowerCase()}.geojson`)
+      .then((r) => (r.ok ? (r.json() as Promise<GeoJSON.FeatureCollection>) : Promise.reject(new Error(String(r.status)))))
+      .catch(() => EMPTY_FC);
+    blocCache.set(aor, p);
+  }
+  return p;
+}
+function syncBlocs(map: maplibregl.Map, refEvents: NumberedEvent[]): void {
+  const src = map.getSource("blocs") as maplibregl.GeoJSONSource | undefined;
   if (!src) return;
-  if ((refEvents[0]?.aor as Aor | undefined) !== "EUCOM") {
+  const aor = refEvents[0]?.aor as Aor | undefined;
+  if (!aor) {
     src.setData(EMPTY_FC);
     return;
   }
-  void loadNato().then((fc) => {
-    const live = map.getSource("nato") as maplibregl.GeoJSONSource | undefined;
-    live?.setData(fc);
+  void loadBlocs(aor).then((fc) => {
+    (map.getSource("blocs") as maplibregl.GeoJSONSource | undefined)?.setData(fc);
   });
 }
 

@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { Affiliation, EventCategory } from "@intel-os/core";
-import { IDENTITY_COLOR_LIGHT } from "@intel-os/core";
+import type { Affiliation, Aor, EventCategory } from "@intel-os/core";
+import { BLOCS, IDENTITY_COLOR_LIGHT } from "@intel-os/core";
 import type { IssueRow } from "@/lib/db";
 import { applyView, decodeView, encodeView, type ViewState } from "@/lib/urlState";
 import TheaterMap, { type NumberedEvent } from "./TheaterMap";
@@ -281,20 +281,41 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
                 Lines and sites appear when an event names them or occurs nearby. Hover
                 for detail.
               </p>
-              {issue.aor === "EUCOM" && (
-                <div className="mt-2 border-t border-[#c9c2ac] pt-2">
-                  <div className="flex items-center gap-2 py-0.5">
-                    <span
-                      className="inline-block w-4 h-3 border"
-                      style={{ backgroundColor: "rgba(125,135,148,0.25)", borderColor: "rgba(125,135,148,0.7)" }}
-                    />
-                    NATO member state
+              {(() => {
+                const aorKey = issue.aor as Aor;
+                const def = BLOCS[aorKey];
+                if (!def || def.blocs.length === 0) return null;
+                const hasContested = def.alignments.some((a) => a.certainty === "contested");
+                return (
+                  <div className="mt-2 border-t border-[#c9c2ac] pt-2">
+                    {def.blocs.map((b) => (
+                      <div key={b.key} className="flex items-center gap-2 py-0.5">
+                        <span
+                          className="inline-block w-4 h-3 border"
+                          style={{ backgroundColor: `${b.color}44`, borderColor: `${b.color}b0` }}
+                        />
+                        {b.label}
+                      </div>
+                    ))}
+                    {hasContested && (
+                      <div className="flex items-center gap-2 py-0.5">
+                        <span
+                          className="inline-block w-4 h-3 border border-[#6b675c]/60"
+                          style={{
+                            backgroundImage:
+                              "repeating-linear-gradient(45deg, rgba(90,86,78,0.7) 0 1px, transparent 1px 4px)",
+                          }}
+                        />
+                        Contested / uncertain
+                      </div>
+                    )}
+                    <p className="mt-1 max-w-[190px] leading-snug text-[#6b675c]">
+                      Declared alliance / bloc membership — political context, not an event
+                      affiliation and not a prediction.
+                    </p>
                   </div>
-                  <p className="mt-1 max-w-[190px] leading-snug text-[#6b675c]">
-                    Political context (alliance membership) — not an event affiliation.
-                  </p>
-                </div>
-              )}
+                );
+              })()}
             </div>
           </div>
 

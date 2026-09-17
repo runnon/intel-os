@@ -1,6 +1,39 @@
 # Decision Log
 
-## 2026-09-17 — NATO member-state shading on the EUCOM map
+## 2026-09-17 — Alliance / bloc reference layer (all six commands)
+
+**Decision (Xavier):** Generalize the NATO shading into a per-command **bloc layer** so
+a reader can see declared alignment ("who is in which bloc") as a factual backdrop under
+the events — with distinct treatment for genuinely uncertain areas. Supersedes the
+EUCOM-only NATO layer below.
+
+**Invariant-safe framing (why this is not an AUTO-5 violation):**
+- Only **declared, factual** membership is encoded, each grounded in a NAMED organisation
+  or treaty (`basis` field): NATO, CSTO, GCC, US Major-Non-NATO-Ally status, the
+  Quad/AUKUS, ASEAN, ECOWAS, the Sahel Alliance (AES), USMCA, ALBA. We never encode
+  "who would side with whom" — that is an assessment.
+- Genuinely fluid/disputed alignment is marked `contested` and rendered as **diagonal
+  hatch + dashed border**, never solid membership (e.g. Ukraine/Georgia→NATO aspirant;
+  Iraq/Lebanon/Yemen→Iran-lean contested). Where there is no factual basis, the country is
+  omitted → unshaded (the DATA-4 instinct: uncertain stays unknown, not guessed).
+- This is **hand-curated maintainer reference data** (`packages/core/src/blocs.ts`), NOT
+  produced by the unattended ingest path. First pass by the agent; fluid theaters
+  (AFRICOM/CENTCOM) are expected to need maintainer correction.
+- Colours are a muted family (slate ≈ US-aligned bloc, rust ≈ US-rival, taupe ≈ regional
+  body) held clear of the four MIL-STD affiliation hues; a unit test enforces this, that
+  every alignment references a defined bloc, and no country is listed twice. Legend labels
+  it "declared alliance/bloc membership — political context, not an event affiliation and
+  not a prediction."
+
+**Data / NFR-4/NFR-5:** `scripts/build-blocs.ts` joins the bloc table to public-domain
+Natural Earth boundaries (110m, 50m fallback for microstates like Bahrain), rounds coords
+to ~1 km, and emits `web/public/geo/blocs-<aor>.geojson` (5–34 KB each). Same-origin
+static assets, fetched + cached per AOR client-side, fail quiet; no third-party runtime
+dependency. `syncBlocs` clears the layer if an AOR has no table. Re-run the script when
+the table changes. Build + 70 tests green; verified live on EUCOM (Ukraine/Georgia
+hatched) and CENTCOM (GCC/US-ally/Iran + Iraq/Yemen hatched).
+
+## 2026-09-17 — NATO member-state shading on the EUCOM map (superseded)
 
 **Decision (Xavier):** Shade NATO member states on the EUCOM theater map so a reader
 sees alliance membership at a glance (NATO vs non-NATO).
