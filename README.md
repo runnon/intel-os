@@ -9,6 +9,10 @@ agency. MIT licensed — see `LICENSE` and `CONTRIBUTING.md`.
 
 **Live**: https://intel-os.org (all six combatant commands, 12-hour unattended cycle)
 
+**Long-term goal**: Theater Picture is the first app. The larger aim is a platform for
+building and deploying unit-specific tools that are born accreditation-ready for
+restricted US government networks — see [`docs/VISION.md`](docs/VISION.md).
+
 The product spec and the hand-built proof sheet (OS-IRN-26-001) are maintained outside
 this repository; the spec's requirement IDs (AUTO/DATA/UX/ANL/GEO/MARK/NFR) referenced
 throughout the code are mapped in the conformance table below.
@@ -34,7 +38,8 @@ web/      Next.js theater view (Vercel): command selector → MapLibre map with
 supabase/ Postgres schema: events, event_sources, event_revisions, issues
           (immutable snapshots), ingest_runs. Public read via RLS; writes via
           service role only.
-docs/     DECISIONS.md · symbology/ (MIL-STD-2525E w/CHG 1 + machine-readable tables)
+docs/     VISION.md (long-term goal) · DECISIONS.md · symbology/ (MIL-STD-2525E
+          w/CHG 1 + machine-readable tables)
 research/ Market, NIPRNet/compliance, and 14N-workflow research reports
 ```
 
