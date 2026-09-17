@@ -11,5 +11,7 @@ dist/
 # Personal product documents — not for public distribution (see spec RISK-7)
 Iran_Theater_Picture_ANSI-D_3.pdf
 Theater_Picture_Product_Spec_v0.1.pdf
+# Exported report PDFs (test artifacts) — regenerated from the app, never tracked
+/*.pdf
 # Internal market/compliance research — keep out of the public repo
 research/

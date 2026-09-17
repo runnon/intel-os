@@ -26,6 +26,9 @@ export function symbolFor(ev: Pick<TheaterEvent, 'affiliation' | 'category' | 'p
     size: 22,
     outlineWidth: 2,
     outlineColor: 'rgba(10,14,18,0.9)',
+    // Pin the affiliation fill to the 2525E Light set so the legends (which use
+    // IDENTITY_COLOR_LIGHT) match the plotted symbols exactly.
+    colorMode: 'Light',
   });
   const { width, height } = symbol.getSize();
   const url = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(symbol.asSVG())))}`;

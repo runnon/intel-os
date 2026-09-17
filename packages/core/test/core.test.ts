@@ -276,3 +276,88 @@ describe('per-AOR gazetteers (multi-command expansion)', () => {
     expect(r.lat).toBeNull();
   });
 });
+
+describe('special-feature plotting (infrastructure)', () => {
+  it('geolocates named infrastructure points above threshold', async () => {
+    const { GAZETTEERS, geolocate } = await import('../src/index');
+    const cases = [
+      ['CENTCOM', 'East-West Pipeline', 'Saudi Arabia'],
+      ['CENTCOM', 'Kharg Island', 'Iran'],
+      ['CENTCOM', 'Fordow', 'Iran'],
+      ['EUCOM', 'Nord Stream', undefined],
+      ['SOUTHCOM', 'José Terminal', 'Venezuela'],
+    ] as const;
+    for (const [aor, place, country] of cases) {
+      const r = geolocate(place, country, GAZETTEERS[aor]);
+      expect(r.validated, `${aor}:${place}`).toBe(true);
+      expect(r.lat, `${aor}:${place}`).not.toBeNull();
+    }
+  });
+
+  it('matches infrastructure by alias (petroline)', async () => {
+    const { GAZETTEERS, geolocate } = await import('../src/index');
+    const r = geolocate('Petroline', 'Saudi Arabia', GAZETTEERS.CENTCOM);
+    expect(r.validated).toBe(true);
+    expect(r.matchedName).toBe('East-West Pipeline');
+  });
+});
+
+describe('linear infrastructure (referencedLines)', () => {
+  it('shows a pipeline when an event mentions it, even if unplotted', async () => {
+    const { referencedLines } = await import('../src/index');
+    const lines = referencedLines(
+      [{ title: 'Drones strike the East-West Pipeline', summary: '', placeName: '' }],
+      'CENTCOM',
+    );
+    expect(lines.map((l) => l.name)).toContain('East-West Pipeline');
+    expect((lines[0]?.coordinates.length ?? 0)).toBeGreaterThan(1);
+  });
+
+  it('matches by alias in the summary text', async () => {
+    const { referencedLines } = await import('../src/index');
+    const lines = referencedLines(
+      [{ title: 'Sabotage in the Baltic', summary: 'Damage to Nord Stream 2 reported.', placeName: 'Baltic Sea' }],
+      'EUCOM',
+    );
+    expect(lines.map((l) => l.name)).toContain('Nord Stream');
+  });
+
+  it('returns nothing when no line is mentioned', async () => {
+    const { referencedLines } = await import('../src/index');
+    expect(referencedLines([{ title: 'Airstrike near Kyiv' }], 'EUCOM')).toHaveLength(0);
+  });
+
+  it('has valid coordinates for every curated line', async () => {
+    const { INFRASTRUCTURE_LINES, AORS } = await import('../src/index');
+    for (const aor of AORS) {
+      for (const line of INFRASTRUCTURE_LINES[aor]) {
+        expect(line.coordinates.length, `${aor}:${line.name}`).toBeGreaterThan(1);
+        expect(line.sourceName, `${aor}:${line.name}`).toBeTruthy();
+        for (const [lng, lat] of line.coordinates) {
+          expect(Math.abs(lat), `${aor}:${line.name}`).toBeLessThanOrEqual(90);
+          expect(Math.abs(lng), `${aor}:${line.name}`).toBeLessThanOrEqual(180);
+        }
+      }
+    }
+  });
+
+  it('uses mapped geometry for the CENTCOM oil routes', async () => {
+    const { INFRASTRUCTURE_LINES } = await import('../src/index');
+    const eastWest = INFRASTRUCTURE_LINES.CENTCOM.find((line) => line.name === 'East-West Pipeline');
+    const habshan = INFRASTRUCTURE_LINES.CENTCOM.find((line) => line.name.includes('Habshan'));
+    const gourehJask = INFRASTRUCTURE_LINES.CENTCOM.find((line) => line.name.includes('Goureh'));
+
+    for (const line of [eastWest, habshan, gourehJask]) {
+      expect(line?.basis).toBe('mapped');
+      expect(line?.coordinates.length ?? 0).toBeGreaterThan(20);
+      expect(line?.sourceName).toContain('Global Energy Monitor');
+    }
+  });
+
+  it('routes Malacca traffic through the Singapore Strait instead of over Malaysia', async () => {
+    const { INFRASTRUCTURE_LINES } = await import('../src/index');
+    const malacca = INFRASTRUCTURE_LINES.INDOPACOM.find((line) => line.name.includes('Malacca'));
+    expect(malacca?.basis).toBe('routed');
+    expect(malacca?.coordinates.some(([lng, lat]) => lng >= 103.5 && lng <= 104.8 && lat >= 1 && lat <= 1.8)).toBe(true);
+  });
+});

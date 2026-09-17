@@ -15,7 +15,21 @@ export interface GazetteerEntry {
   country: string;
   lat: number;
   lon: number;
-  kind: 'city' | 'base' | 'facility' | 'chokepoint' | 'island' | 'region';
+  // Point-precision infrastructure (airport/port/pipeline/refinery/nuclear/dam)
+  // is treated like a base/facility: a specific named site that plots at a point.
+  kind:
+    | 'city'
+    | 'base'
+    | 'facility'
+    | 'chokepoint'
+    | 'island'
+    | 'region'
+    | 'airport'
+    | 'port'
+    | 'pipeline'
+    | 'refinery'
+    | 'nuclear'
+    | 'dam';
 }
 
 export const GEO_CONFIDENCE_THRESHOLD = 0.5;
@@ -100,6 +114,15 @@ export const CENTCOM_GAZETTEER: GazetteerEntry[] = [
   { name: 'UAE', aliases: ['united arab emirates'], country: 'UAE', lat: 23.9, lon: 54.3, kind: 'region' },
   { name: 'Oman', aliases: [], country: 'Oman', lat: 21.0, lon: 57.0, kind: 'region' },
   { name: 'Syria', aliases: [], country: 'Syria', lat: 35.0, lon: 38.5, kind: 'region' },
+  // infrastructure / special features
+  { name: 'East-West Pipeline', aliases: ['petroline', 'east-west crude pipeline', 'east west pipeline'], country: 'Saudi Arabia', lat: 25.0, lon: 45.0, kind: 'pipeline' },
+  { name: 'Ras Tanura', aliases: ['ras tanura terminal'], country: 'Saudi Arabia', lat: 26.64, lon: 50.16, kind: 'refinery' },
+  { name: 'Khurais', aliases: ['khurais field'], country: 'Saudi Arabia', lat: 25.12, lon: 48.09, kind: 'refinery' },
+  { name: 'Jubail', aliases: ['al jubail'], country: 'Saudi Arabia', lat: 27.0, lon: 49.66, kind: 'port' },
+  { name: 'Kharg Island', aliases: ['kharg terminal', 'khark island'], country: 'Iran', lat: 29.23, lon: 50.32, kind: 'refinery' },
+  { name: 'Fujairah', aliases: ['fujairah terminal', 'port of fujairah'], country: 'UAE', lat: 25.12, lon: 56.33, kind: 'port' },
+  { name: 'Fordow', aliases: ['fordow enrichment', 'fordo'], country: 'Iran', lat: 34.88, lon: 50.99, kind: 'nuclear' },
+  { name: 'Suez Canal', aliases: ['suez'], country: 'Egypt', lat: 30.5, lon: 32.35, kind: 'chokepoint' },
 ];
 
 export interface GeoResult {
@@ -243,6 +266,14 @@ export const EUCOM_GAZETTEER: GazetteerEntry[] = [
   { name: 'Italy', aliases: [], country: 'Italy', lat: 42.8, lon: 12.8, kind: 'region' },
   { name: 'Sicily', aliases: [], country: 'Italy', lat: 37.6, lon: 14.2, kind: 'region' },
   { name: 'Spain', aliases: [], country: 'Spain', lat: 40.2, lon: -3.7, kind: 'region' },
+  // infrastructure / special features
+  { name: 'Nord Stream', aliases: ['nord stream 1', 'nord stream 2', 'nordstream'], country: 'International', lat: 55.5, lon: 15.6, kind: 'pipeline' },
+  { name: 'Druzhba Pipeline', aliases: ['druzhba', 'friendship pipeline'], country: 'International', lat: 52.1, lon: 24.0, kind: 'pipeline' },
+  { name: 'TurkStream', aliases: ['turk stream'], country: 'International', lat: 43.2, lon: 32.0, kind: 'pipeline' },
+  { name: 'Novorossiysk', aliases: ['novorossiysk port'], country: 'Russia', lat: 44.72, lon: 37.77, kind: 'port' },
+  { name: 'Ust-Luga', aliases: ['ust luga'], country: 'Russia', lat: 59.67, lon: 28.4, kind: 'port' },
+  { name: 'Primorsk', aliases: ['primorsk terminal'], country: 'Russia', lat: 60.35, lon: 28.6, kind: 'refinery' },
+  { name: 'Belbek Air Base', aliases: ['belbek'], country: 'Ukraine', lat: 44.69, lon: 33.57, kind: 'airport' },
 ];
 
 export const INDOPACOM_GAZETTEER: GazetteerEntry[] = [
@@ -305,6 +336,12 @@ export const INDOPACOM_GAZETTEER: GazetteerEntry[] = [
   { name: 'India', aliases: [], country: 'India', lat: 22.0, lon: 79.0, kind: 'region' },
   { name: 'Australia', aliases: [], country: 'Australia', lat: -25.3, lon: 133.8, kind: 'region' },
   { name: 'Indonesia', aliases: [], country: 'Indonesia', lat: -2.5, lon: 118.0, kind: 'region' },
+  // infrastructure / special features
+  { name: 'Yulin Naval Base', aliases: ['yulin', 'longpo'], country: 'China', lat: 18.23, lon: 109.69, kind: 'base' },
+  { name: 'Ream Naval Base', aliases: ['ream'], country: 'Cambodia', lat: 10.51, lon: 103.61, kind: 'base' },
+  { name: 'Power of Siberia', aliases: ['power of siberia pipeline'], country: 'International', lat: 50.3, lon: 127.5, kind: 'pipeline' },
+  { name: 'Ningbo-Zhoushan Port', aliases: ['ningbo', 'zhoushan'], country: 'China', lat: 29.87, lon: 122.0, kind: 'port' },
+  { name: 'Changi Naval Base', aliases: ['changi'], country: 'Singapore', lat: 1.32, lon: 103.99, kind: 'base' },
 ];
 
 export const AFRICOM_GAZETTEER: GazetteerEntry[] = [
@@ -360,6 +397,12 @@ export const AFRICOM_GAZETTEER: GazetteerEntry[] = [
   { name: 'South Africa', aliases: [], country: 'South Africa', lat: -29.0, lon: 25.1, kind: 'region' },
   { name: 'Kenya', aliases: [], country: 'Kenya', lat: 0.4, lon: 37.9, kind: 'region' },
   { name: 'Mozambique', aliases: [], country: 'Mozambique', lat: -18.7, lon: 35.5, kind: 'region' },
+  // infrastructure / special features
+  { name: 'Es Sider', aliases: ['es sider terminal', 'sidra'], country: 'Libya', lat: 30.64, lon: 18.35, kind: 'refinery' },
+  { name: 'Ras Lanuf', aliases: ['ras lanuf terminal'], country: 'Libya', lat: 30.5, lon: 18.53, kind: 'refinery' },
+  { name: 'Sharara Oilfield', aliases: ['sharara'], country: 'Libya', lat: 27.85, lon: 12.5, kind: 'refinery' },
+  { name: 'Mombasa Port', aliases: ['mombasa'], country: 'Kenya', lat: -4.04, lon: 39.67, kind: 'port' },
+  { name: 'East African Crude Oil Pipeline', aliases: ['eacop'], country: 'International', lat: -2.5, lon: 33.0, kind: 'pipeline' },
 ];
 
 export const NORTHCOM_GAZETTEER: GazetteerEntry[] = [
@@ -438,6 +481,12 @@ export const SOUTHCOM_GAZETTEER: GazetteerEntry[] = [
   { name: 'Honduras', aliases: [], country: 'Honduras', lat: 14.8, lon: -86.6, kind: 'region' },
   { name: 'Guatemala', aliases: [], country: 'Guatemala', lat: 15.8, lon: -90.2, kind: 'region' },
   { name: 'Nicaragua', aliases: [], country: 'Nicaragua', lat: 12.9, lon: -85.2, kind: 'region' },
+  // infrastructure / special features
+  { name: 'José Terminal', aliases: ['jose terminal', 'puerto la cruz'], country: 'Venezuela', lat: 10.08, lon: -64.86, kind: 'refinery' },
+  { name: 'Amuay Refinery', aliases: ['amuay', 'paraguaná refinery'], country: 'Venezuela', lat: 11.75, lon: -70.2, kind: 'refinery' },
+  { name: 'Cano Limon Pipeline', aliases: ['cano limon', 'caño limón'], country: 'Colombia', lat: 6.93, lon: -71.3, kind: 'pipeline' },
+  { name: 'Cartagena Refinery', aliases: ['reficar'], country: 'Colombia', lat: 10.32, lon: -75.5, kind: 'refinery' },
+  { name: 'Callao Port', aliases: ['callao'], country: 'Peru', lat: -12.05, lon: -77.14, kind: 'port' },
 ];
 
 

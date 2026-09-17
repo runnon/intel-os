@@ -56,82 +56,99 @@ body {
   color: #171712;
 }
 
+/* Provenance card for static pipeline and maritime-route geometry. */
+.infrastructure-popup .maplibregl-popup-content {
+  max-width: 270px;
+  border: 1px solid rgba(11, 11, 59, 0.3);
+  border-radius: 0;
+  background: rgba(245, 242, 234, 0.97);
+  box-shadow: 0 4px 14px rgba(11, 11, 59, 0.16);
+  color: #171712;
+  padding: 9px 11px;
+}
+
+.infrastructure-popup .maplibregl-popup-content > div {
+  display: grid;
+  gap: 2px;
+}
+
+.infrastructure-popup strong {
+  color: #0b0b3b;
+  font-family: var(--font-ui), sans-serif;
+  font-size: 12px;
+}
+
+.infrastructure-popup span,
+.infrastructure-popup small {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.infrastructure-popup small {
+  color: #6b675c;
+}
+
 /* ---------------------------------------------------------------------------
-   Export / print (UX-5): the sheet is a MULTI-PAGE landscape GEOINT product
-   like the OS-IRN-26-001 proof build. Landscape paper, edge-to-edge, full-width
-   map, running UNCLASSIFIED banners on EVERY page (MARK-2/3), and page breaks
-   that keep the map with the masthead and never split an event card.
+   Export (UX-5): a MULTI-PAGE landscape GEOINT product like the OS-IRN-26-001
+   proof build. The report is built as explicit landscape "page" cards, each
+   carrying its own UNCLASSIFIED banners (MARK-2/3). On screen the cards are a
+   WYSIWYG preview of the PDF; in print each card is exactly one page.
    --------------------------------------------------------------------------- */
 
-/* Running banners exist only in print — fixed elements repeat on every page. */
-.print-running-banner {
-  display: none;
+/* On-screen page card: a fixed-size landscape sheet (1040×735px ≈ landscape
+   letter/A4 aspect) so the preview is an exact pixel model of the printed page —
+   the register pagination measures against this same height. */
+.report-page {
+  width: 1040px;
+  height: 735px;
+  margin: 0 auto 22px;
+  background: #f5f2ea;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  box-shadow: 0 6px 18px rgba(11, 11, 59, 0.14);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.report-page__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 @media print {
   @page {
     size: landscape;
-    /* top/bottom margins reserve space for the running marking banners */
-    margin: 12mm 8mm;
+    margin: 0; /* each page card carries its own banners edge-to-edge */
   }
   html,
   body {
     background: #ffffff;
   }
-  /* The report sheet fills the page width in print (no centered max-width). */
-  .report-sheet {
-    max-width: none !important;
-    width: 100% !important;
-    margin: 0 !important;
-    box-shadow: none !important;
-    border: 0 !important;
+  .report-scroll {
+    overflow: visible !important;
+    background: #ffffff !important;
   }
-  .report-map {
-    width: 100% !important;
+  /* Each card is one printed page. The fixed 1040×735px box fits within both A4
+     and Letter landscape, so no content overflows onto a phantom extra page. */
+  .report-page {
+    margin: 0 auto;
+    border: 0;
+    box-shadow: none;
+    break-after: page;
+    break-inside: avoid;
+  }
+  .report-page:last-child {
+    break-after: auto;
   }
   .maplibregl-ctrl-top-left,
   .maplibregl-ctrl-bottom-right {
     display: none !important; /* zoom + attribution buttons are noise on paper */
   }
-
-  /* The in-flow green bars print once; the running banners cover every page. */
-  .sheet-banner {
-    display: none !important;
-  }
-  .print-running-banner {
-    display: flex !important;
-    position: fixed;
-    left: 0;
-    right: 0;
-    height: 9mm;
-    align-items: center;
-    justify-content: center;
-    background: #1f4a2e;
-    color: #dcead9;
-    font-family: var(--font-ui), monospace;
-    font-size: 9px;
-    letter-spacing: 0.28em;
+  /* Print the affiliation colors: banners, legend swatches, card borders. */
+  .report-page,
+  .report-page * {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
-  }
-  .print-running-banner.top {
-    top: 0;
-  }
-  .print-running-banner.bottom {
-    bottom: 0;
-  }
-
-  /* Pagination: keep the map page intact, start the event register on a new
-     page, and never break a card, the masthead, or a footer block mid-element. */
-  .break-before-page {
-    break-before: page;
-  }
-  .avoid-break {
-    break-inside: avoid;
-  }
-
-  /* Ensure the sheet isn't clipped by the on-screen scroll container. */
-  .report-scroll {
-    overflow: visible !important;
   }
 }

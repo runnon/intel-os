@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { Affiliation, EventCategory } from "@intel-os/core";
+import { IDENTITY_COLOR_LIGHT } from "@intel-os/core";
 import type { IssueRow } from "@/lib/db";
 import { applyView, decodeView, encodeView, type ViewState } from "@/lib/urlState";
 import TheaterMap, { type NumberedEvent } from "./TheaterMap";
@@ -18,10 +19,10 @@ const WINDOW_PRESETS: { label: string; hours: number | null }[] = [
 // hex = dark accent for text/spines; fill = the exact MIL-STD-2525 light fill
 // milsymbol paints on the map (Table XV light set) so the legend matches the symbols.
 export const AFF_META: { key: Affiliation; label: string; hex: string; fill: string }[] = [
-  { key: "hostile", label: "Hostile action", hex: "#a02c2c", fill: "rgb(255,128,128)" },
-  { key: "friendly", label: "Friendly action", hex: "#1f4e79", fill: "rgb(128,224,255)" },
-  { key: "neutral", label: "Neutral", hex: "#1f4a2e", fill: "rgb(170,255,170)" },
-  { key: "unknown", label: "Unknown / contested", hex: "#b08800", fill: "rgb(255,255,128)" },
+  { key: "hostile", label: "Hostile action", hex: "#a02c2c", fill: IDENTITY_COLOR_LIGHT.hostile },
+  { key: "friendly", label: "Friendly action", hex: "#1f4e79", fill: IDENTITY_COLOR_LIGHT.friendly },
+  { key: "neutral", label: "Neutral", hex: "#1f4a2e", fill: IDENTITY_COLOR_LIGHT.neutral },
+  { key: "unknown", label: "Unknown / contested", hex: "#b08800", fill: IDENTITY_COLOR_LIGHT.unknown },
 ];
 
 const CATS: EventCategory[] = ["strike", "ground", "maritime", "infrastructure", "air-defense", "movement", "political", "other"];
@@ -187,6 +188,7 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
         <div className="flex-1 min-h-[340px] relative">
           <TheaterMap
             events={plottable}
+            referenceEvents={filtered}
             selectedId={view.selectedEvent}
             onSelect={(id) => updateView({ selectedEvent: id })}
           />
@@ -216,6 +218,19 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
                 </button>
               );
             })}
+            <div className="mt-2 border-t border-[#c9c2ac] pt-2 font-mono text-[9px] text-[#514d43]">
+              <div className="flex items-center gap-2 py-0.5">
+                <span className="w-7 border-t-[2px] border-dashed border-[#8a6100]" />
+                Mapped pipeline
+              </div>
+              <div className="flex items-center gap-2 py-0.5">
+                <span className="w-7 border-t-[2px] border-dashed border-[#1f4e79]" />
+                Shipping-network route
+              </div>
+              <p className="mt-1 max-w-[190px] leading-snug text-[#6b675c]">
+                Hover a line for source and accuracy.
+              </p>
+            </div>
           </div>
 
           {/* Selection callout — proof-build card docked over the map */}

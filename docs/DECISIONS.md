@@ -119,3 +119,18 @@ needed. The GitHub Actions workflow added earlier as a durable fallback was
 removed (it required a RAILWAY_TOKEN secret and would only have added redundant
 runs). The session-scoped Claude check remains as an independent verifier that
 the scheduled run keeps firing.
+
+## 2026-09-16 — Linear infrastructure uses bundled public-source geometry
+
+- Straight endpoint-to-endpoint overlays were rejected because maritime lines
+  could cross land and coarse pipeline lines overstated their precision.
+- Maritime corridors are now precomputed from the Eurostat SeaRoute 5 km
+  network (ORNL Global Shipping Lane Network plus AIS-derived links). They are
+  representative traffic corridors, not live vessel tracks or navigation data.
+- CENTCOM oil-pipeline geometry comes from Global Energy Monitor's June 2026
+  Global Oil Infrastructure Tracker release and is simplified only for display.
+  Older public-reference pipeline alignments in other AORs remain explicitly
+  marked approximate until equivalent open GIS geometry is reviewed.
+- Coordinates and provenance ship in `packages/core`; the browser performs no
+  route-service call. This preserves NFR-4/NFR-5 and makes published/exported
+  map geometry reproducible.

@@ -39,7 +39,7 @@ const EVENT_SCHEMA = {
             enum: ['hostile', 'friendly', 'neutral', 'unknown'],
             description: "Actor conducting the action relative to US forces. Contested, unclaimed, or single-belligerent-only attribution MUST be 'unknown' — never guess.",
           },
-          placeName: { type: 'string' as const, description: 'Most specific named place in the reporting (base, city, strait). Empty string if none.' },
+          placeName: { type: 'string' as const, description: 'The most specific named place OR named infrastructure/feature in the reporting — prefer a named facility over the surrounding city when both appear. Includes airports and air bases, seaports and naval bases, oil/gas pipelines, refineries and oil/LNG terminals, power plants and nuclear sites, dams, bridges, and straits/canals. Use the feature\'s common name (e.g. "East-West Pipeline", "Abqaiq", "Zaporizhzhia Nuclear Power Plant", "Kadena Air Base"). Empty string if none.' },
           country: { type: 'string' as const, description: 'Country of the event, or empty string' },
           confOrigin: { enum: ['high', 'moderate', 'low'], description: 'Confidence in WHERE it happened, from source quality' },
           confActor: { enum: ['high', 'moderate', 'low'], description: 'Confidence in WHO did it' },
