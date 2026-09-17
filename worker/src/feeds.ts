@@ -36,6 +36,7 @@ const SHARED_FEEDS: FeedDef[] = [
   { url: 'https://feeds.bbci.co.uk/news/world/rss.xml', outlet: 'BBC' },
   { url: 'https://news.un.org/feed/subscribe/en/news/all/rss.xml', outlet: 'UN News' },
   { url: 'https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=1&Site=945&max=30', outlet: 'US DoD' },
+  { url: 'https://www.dvidshub.net/rss/news', outlet: 'DVIDS' }, // official US military releases firehose
   { url: 'https://www.defenseone.com/rss/all/', outlet: 'Defense One' },
   { url: 'https://gcaptain.com/feed/', outlet: 'gCaptain' },
   { url: 'https://www.navalnews.com/feed/', outlet: 'Naval News' },
@@ -70,17 +71,17 @@ const AOR_FEEDS: Record<Aor, FeedDef[]> = {
 // "multiple points" net; the curated RSS feeds above anchor source quality.
 const GDELT_QUERIES: Record<Aor, string> = {
   CENTCOM:
-    '(Iran OR Houthi OR CENTCOM OR "Persian Gulf" OR Hormuz OR "Red Sea") (strike OR missile OR drone OR attack OR intercept OR base)',
+    '(Iran OR Houthi OR CENTCOM OR Yemen OR Syria OR Iraq OR Hezbollah OR IRGC OR "Persian Gulf" OR Hormuz OR "Red Sea" OR "Bab el-Mandeb") (strike OR airstrike OR missile OR drone OR attack OR intercept OR shelling OR seizure OR launch OR killed)',
   EUCOM:
-    '(Ukraine OR Russia OR NATO OR Crimea OR "Black Sea" OR Kaliningrad OR "Baltic Sea") (strike OR missile OR drone OR offensive OR shelling OR sabotage OR incursion)',
+    '(Ukraine OR Russia OR NATO OR Crimea OR Belarus OR Moldova OR "Black Sea" OR Kaliningrad OR "Baltic Sea" OR Zaporizhzhia) (strike OR airstrike OR missile OR drone OR offensive OR shelling OR sabotage OR incursion OR advance OR killed)',
   INDOPACOM:
-    '(Taiwan OR "South China Sea" OR "North Korea" OR PLA OR Senkaku OR Philippines) (missile OR incursion OR drills OR blockade OR launch OR warship OR intercept)',
+    '(Taiwan OR "South China Sea" OR "North Korea" OR PLA OR Senkaku OR Philippines OR "Taiwan Strait" OR Pyongyang OR "East China Sea") (missile OR incursion OR drills OR blockade OR launch OR warship OR intercept OR jet OR coast guard)',
   AFRICOM:
-    '(Somalia OR "al-Shabaab" OR Sudan OR Mali OR Niger OR "Burkina Faso" OR Libya OR Congo OR Sahel) (attack OR strike OR ambush OR offensive OR militants OR insurgents)',
+    '(Somalia OR "al-Shabaab" OR Sudan OR Mali OR Niger OR "Burkina Faso" OR Libya OR Congo OR Sahel OR Mozambique OR Nigeria OR "Boko Haram") (attack OR strike OR ambush OR offensive OR militants OR insurgents OR clashes OR killed OR raid)',
   NORTHCOM:
-    '(NORAD OR "Coast Guard" OR cartel OR "Mexican military" OR Arctic OR Alaska) (intercept OR seizure OR deployment OR incursion OR operation OR trafficking)',
+    '(NORAD OR "Coast Guard" OR cartel OR "Mexican military" OR Arctic OR Alaska OR Sinaloa OR fentanyl OR "southern border") (intercept OR seizure OR deployment OR incursion OR operation OR trafficking OR strike OR patrol)',
   SOUTHCOM:
-    '(Venezuela OR Colombia OR Ecuador OR Haiti OR "Panama Canal" OR Guyana OR Caribbean) (military OR navy OR seizure OR gang OR deployment OR strike)',
+    '(Venezuela OR Colombia OR Ecuador OR Haiti OR "Panama Canal" OR Guyana OR Caribbean OR Maduro OR Essequibo OR "drug trafficking") (military OR navy OR seizure OR gang OR deployment OR strike OR patrol OR incursion)',
 };
 
 const MAX_ARTICLE_AGE_MS = 72 * 3600_000; // stale RSS backlog is noise, not reporting
