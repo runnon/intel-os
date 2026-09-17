@@ -70,9 +70,41 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
     () => applyView(events, view, issue.info_cutoff).sort((a, b) => b.num - a.num),
     [events, view, issue.info_cutoff],
   );
+  const eventListRef = useRef<HTMLDivElement>(null);
+  const eventRowRefs = useRef(new Map<string, HTMLButtonElement>());
   const plottable = filtered.filter((e) => e.lat != null && e.lon != null);
   const unplotted = filtered.filter((e) => e.lat == null || e.lon == null);
   const selected = filtered.find((e) => e.id === view.selectedEvent) ?? null;
+
+  // Keep map/keyboard selections synchronized with the event index without
+  // moving browser focus or scrolling the whole page.
+  useEffect(() => {
+    if (!view.selectedEvent) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      const list = eventListRef.current;
+      const row = eventRowRefs.current.get(view.selectedEvent!);
+      if (!list || !row) return;
+
+      const listRect = list.getBoundingClientRect();
+      const rowRect = row.getBoundingClientRect();
+      const rowIsVisible = rowRect.top >= listRect.top && rowRect.bottom <= listRect.bottom;
+      if (rowIsVisible) return;
+
+      const centeredTop =
+        list.scrollTop +
+        (rowRect.top - listRect.top) -
+        (list.clientHeight - rowRect.height) / 2;
+      const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      list.scrollTo({
+        top: Math.max(0, centeredTop),
+        behavior: prefersReducedMotion ? "auto" : "smooth",
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [filtered, view.selectedEvent]);
 
   // prev/next step through the filtered set in chronological order
   const chrono = useMemo(() => [...filtered].sort((a, b) => a.num - b.num), [filtered]);
@@ -251,7 +283,7 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
           <div className="px-4 py-2 border-b border-[#e3ddcc] font-mono text-[9px] tracking-[0.2em] text-[#918c7d] shrink-0">
             EVENT INDEX · NEWEST FIRST
           </div>
-          <div className="overflow-y-auto flex-1">
+          <div ref={eventListRef} className="overflow-y-auto flex-1">
             {filtered.length === 0 && (
               <p className="p-4 text-xs font-mono text-[#6b675c]">No events match the current filters.</p>
             )}
@@ -260,7 +292,12 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
               return (
                 <button
                   key={e.id}
+                  ref={(node) => {
+                    if (node) eventRowRefs.current.set(e.id, node);
+                    else eventRowRefs.current.delete(e.id);
+                  }}
                   onClick={() => updateView({ selectedEvent: isSel ? null : e.id })}
+                  aria-current={isSel ? "true" : undefined}
                   className={`w-full text-left pl-3 pr-4 py-2.5 border-b border-[#e3ddcc] border-l-[3px] transition-colors ${
                     isSel ? "bg-[#ece5d0]" : "border-l-transparent hover:bg-[#efeadb]"
                   }`}
