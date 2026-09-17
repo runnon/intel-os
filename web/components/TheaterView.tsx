@@ -281,6 +281,20 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
                 Lines and sites appear when an event names them or occurs nearby. Hover
                 for detail.
               </p>
+              {issue.aor === "EUCOM" && (
+                <div className="mt-2 border-t border-[#c9c2ac] pt-2">
+                  <div className="flex items-center gap-2 py-0.5">
+                    <span
+                      className="inline-block w-4 h-3 border"
+                      style={{ backgroundColor: "rgba(125,135,148,0.25)", borderColor: "rgba(125,135,148,0.7)" }}
+                    />
+                    NATO member state
+                  </div>
+                  <p className="mt-1 max-w-[190px] leading-snug text-[#6b675c]">
+                    Political context (alliance membership) — not an event affiliation.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 

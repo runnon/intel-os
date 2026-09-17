@@ -27,6 +27,11 @@ const POI_COLOR_MATCH = [
   POI_COLORS.city,
   POI_COLORS.city,
 ] as unknown as maplibregl.DataDrivenPropertyValueSpecification<string>;
+// Slate wash for NATO member states — a neutral blue-gray held well clear of the
+// affiliation hues (hostile red / friendly blue / neutral green / unknown yellow)
+// so an alliance overlay never reads as an event affiliation.
+const NATO_TINT = "#7d8794";
+
 const POI_LABELS: Record<PointFeature["category"], string> = {
   airfield: "Airfield / air base",
   port: "Port / naval facility",
@@ -155,6 +160,25 @@ export default function TheaterMap({ events, selectedId, onSelect, forExport = f
 
     map.on("style.load", () => {
       recolorToPrint(map);
+
+      // NATO member states (EUCOM only): a faint slate wash + thin border, drawn
+      // beneath everything else. Deliberately NEUTRAL vs the MIL-STD affiliation
+      // palette — this is political context (who is in the alliance), never a
+      // claim that events here are "friendly". Public-domain Natural Earth
+      // geometry ships as a same-origin static asset (NFR-4/NFR-5 safe).
+      map.addSource("nato", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      map.addLayer({
+        id: "nato-fill",
+        type: "fill",
+        source: "nato",
+        paint: { "fill-color": NATO_TINT, "fill-opacity": 0.16 },
+      });
+      map.addLayer({
+        id: "nato-border",
+        type: "line",
+        source: "nato",
+        paint: { "line-color": NATO_TINT, "line-width": 0.6, "line-opacity": 0.55 },
+      });
 
       // Public-source linear infrastructure, drawn beneath event symbols. A pale
       // casing keeps the geometry readable against both land and water.
@@ -387,6 +411,7 @@ export default function TheaterMap({ events, selectedId, onSelect, forExport = f
       readyRef.current = true;
       const activeLines = syncInfraLines(map, refEventsRef.current);
       syncInfraPoints(map, refEventsRef.current);
+      syncNato(map, refEventsRef.current);
       fitToContent(map, eventsRef.current, activeLines, false, forExport);
       // Register the symbol images, then lay out (declutter) at the fitted view.
       void ensureImages(map, eventsRef.current).then(() =>
@@ -437,6 +462,7 @@ export default function TheaterMap({ events, selectedId, onSelect, forExport = f
     if (!map || !readyRef.current) return;
     syncInfraLines(map, referenceEvents ?? events);
     syncInfraPoints(map, referenceEvents ?? events);
+    syncNato(map, referenceEvents ?? events);
     if (forExport) fitToContent(map, events, referencedFor(referenceEvents ?? events), false, true);
     void ensureImages(map, events).then(() =>
       relayout(map, events, layoutRef.current, !forExport, selectedIdRef.current),
@@ -485,6 +511,30 @@ export default function TheaterMap({ events, selectedId, onSelect, forExport = f
 function referencedFor(refEvents: NumberedEvent[]): LineFeature[] {
   const aor = refEvents[0]?.aor as Aor | undefined;
   return aor ? referencedLines(refEvents, aor) : [];
+}
+
+// NATO member states — shaded on the EUCOM map only. Geometry is fetched once from
+// a same-origin static asset (public-domain Natural Earth) and cached.
+let natoData: Promise<GeoJSON.FeatureCollection> | null = null;
+function loadNato(): Promise<GeoJSON.FeatureCollection> {
+  if (!natoData) {
+    natoData = fetch("/geo/nato-eucom.geojson")
+      .then((r) => (r.ok ? (r.json() as Promise<GeoJSON.FeatureCollection>) : Promise.reject(new Error(String(r.status)))))
+      .catch(() => EMPTY_FC); // fail quiet — the theater still renders without the wash
+  }
+  return natoData;
+}
+function syncNato(map: maplibregl.Map, refEvents: NumberedEvent[]): void {
+  const src = map.getSource("nato") as maplibregl.GeoJSONSource | undefined;
+  if (!src) return;
+  if ((refEvents[0]?.aor as Aor | undefined) !== "EUCOM") {
+    src.setData(EMPTY_FC);
+    return;
+  }
+  void loadNato().then((fc) => {
+    const live = map.getSource("nato") as maplibregl.GeoJSONSource | undefined;
+    live?.setData(fc);
+  });
 }
 
 // Draw the context sites (airfields/ports/energy/cities) referenced by the current

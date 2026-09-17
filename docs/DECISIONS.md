@@ -1,5 +1,27 @@
 # Decision Log
 
+## 2026-09-17 — NATO member-state shading on the EUCOM map
+
+**Decision (Xavier):** Shade NATO member states on the EUCOM theater map so a reader
+sees alliance membership at a glance (NATO vs non-NATO).
+
+**Design guard — kept orthogonal to affiliation:** In a MIL-STD-2525 product, color
+means the *affiliation of the event actor* (hostile/friendly/neutral/unknown). A country
+shaded "NATO" must never read as "events here are friendly," so the layer uses a
+deliberately neutral slate wash (`#7d8794`, 16% fill) held clear of the four affiliation
+hues, drawn beneath everything, with a legend line: "NATO member state — political
+context (alliance membership), not an event affiliation." This is public, factual context
+(who is in the alliance), not an assessment — AUTO-5/DATA-4 unaffected.
+
+**Data / NFR-4/NFR-5:** Boundary geometry is public-domain **Natural Earth 110m**
+(`ne_110m_admin_0_countries`), filtered to the 30 EUCOM NATO members (US/Canada are
+NORTHCOM and off-viewport), coordinates rounded to ~1 km, shipped as a same-origin static
+asset `web/public/geo/nato-eucom.geojson` (18 KB). No third-party runtime dependency;
+fetched client-side and cached, and it fails quiet (theater still renders without it).
+Scoped to EUCOM only (`syncNato` clears the source for other AORs). Adding US/Canada to
+NORTHCOM later is a straightforward follow-on. Build + 68 tests green; verified live on
+`/t/eucom` (Ukraine/Russia/Belarus/Austria/Switzerland/Ireland correctly unshaded).
+
 ## 2026-09-17 — Context sites (airfields/ports/energy/cities) on the map
 
 **Decision (Xavier):** Draw curated context points of interest — airfields/air bases,
