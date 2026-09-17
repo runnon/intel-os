@@ -3,6 +3,7 @@ import {
   assertPublicSource,
   buildSituationUpdate,
   CENTCOM_GAZETTEER,
+  NORTHCOM_GAZETTEER,
   dedupe,
   DISCLAIMER,
   eventSidc,
@@ -101,6 +102,19 @@ describe('gazetteer / geolocate (DATA-2, AUTO-3)', () => {
     expect(strong.validated).toBe(true);
     const weak = geolocate('near the Jazan area border crossing', 'Iran');
     expect(weak.confidence).toBeLessThan(strong.confidence);
+  });
+
+  it('does not let a short alias (us/usa) substring-match a country centroid', () => {
+    // Regression: "US bases in the Gulf" was pinned on the US centroid (Kansas)
+    // in NORTHCOM because the 2-letter alias "us" substring-matched. It should
+    // resolve to nothing here — a Gulf event has no home in the NORTHCOM gazetteer.
+    const r = geolocate('US bases in the Gulf', undefined, NORTHCOM_GAZETTEER);
+    expect(r.validated).toBe(false);
+    expect(r.lat).toBeNull();
+    // The exact country name still resolves to the region centroid.
+    const exact = geolocate('United States', 'United States', NORTHCOM_GAZETTEER);
+    expect(exact.validated).toBe(true);
+    expect(exact.precision).toBe('region');
   });
 
   it('gazetteer has no duplicate normalized names', () => {

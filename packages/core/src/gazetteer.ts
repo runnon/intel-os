@@ -166,6 +166,23 @@ const norm = (s: string) =>
     .replace(/\s+/g, ' ')
     .trim();
 
+// Partial (non-exact) matching must be on WHOLE-WORD boundaries and must never be
+// anchored by a tiny name/alias. A raw substring test let the 2-letter alias "us"
+// (United States) match "US bases in the Gulf" and pin a Persian-Gulf event on the
+// US geographic centroid in Kansas. Short tokens ("us", "usa", "uae") still resolve
+// via the exact-match path; they just can't anchor a fuzzy substring hit.
+const PARTIAL_MIN_LEN = 4;
+function wordIn(haystack: string, needle: string): boolean {
+  const esc = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`\\b${esc}\\b`).test(haystack);
+}
+function partialHit(q: string, name: string): boolean {
+  if (name.replace(/ /g, '').length < PARTIAL_MIN_LEN) return false; // 'us'/'usa' can't anchor
+  if (wordIn(q, name)) return true; // gazetteer name appears as whole word(s) in the query
+  if (q.replace(/ /g, '').length >= PARTIAL_MIN_LEN && wordIn(name, q)) return true;
+  return false;
+}
+
 function precisionFor(kind: GazetteerEntry['kind']): Precision {
   if (kind === 'region') return 'region';
   if (kind === 'city' || kind === 'chokepoint') return 'settlement';
@@ -185,7 +202,7 @@ export function geolocate(placeName: string, country?: string, gaz: GazetteerEnt
     const names = [entry.name, ...entry.aliases].map(norm);
     let score = 0;
     if (names.includes(q)) score = 0.85;
-    else if (names.some((n) => q.includes(n) || n.includes(q))) score = 0.6;
+    else if (names.some((n) => partialHit(q, n))) score = 0.6;
     if (score === 0) continue;
     if (country && norm(entry.country) === norm(country)) score += 0.1;
     else if (country && entry.country !== 'International' && norm(entry.country) !== norm(country)) score -= 0.25;

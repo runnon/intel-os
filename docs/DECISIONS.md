@@ -1,5 +1,25 @@
 # Decision Log
 
+## 2026-09-17 — Geolocation: partial matches must be whole-word, not substring
+
+**Bug:** An event titled "US bases in the Gulf" (Persian Gulf, mis-selected into
+NORTHCOM) was pinned on the US geographic centroid in Kansas (39.8, -98.6). Root cause:
+`geolocate` scored a partial match with a raw substring test (`q.includes(n)`), so the
+United States entry's 2-letter alias `us` matched the "US" in the title. Any placeName
+containing the letters "us" could be dragged to the US centroid.
+
+**Fix:** Partial (non-exact) matches now require whole-word boundaries and ignore any
+name/alias shorter than 4 chars as an anchor (`partialHit` in `gazetteer.ts`). Short
+tokens (`us`, `usa`, `uae`) still resolve via the exact-match path; they just can't
+anchor a fuzzy substring hit. Unmatched place names correctly go unplotted (list-only,
+"position withheld") per DATA-2/AUTO-3. Regression test added.
+
+**Still open (separate, judgement calls — not changed here):** (1) events the extractor
+tags with placeName "United States" still plot at the region centroid (DATA-3 fallback),
+which stacks homeland + overseas-US-forces events on one Kansas pin; (2) the extractor
+sometimes reports the actor's nationality ("United States") as the event *location* for
+stories that are physically in the Middle East. Both need a maintainer decision.
+
 ## 2026-09-17 — CENTCOM gains Israel / Palestinian Territories / Lebanon coverage
 
 **Decision (Xavier):** Add Israel, the Palestinian Territories (Gaza + West Bank), and
