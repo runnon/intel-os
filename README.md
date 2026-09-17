@@ -7,7 +7,7 @@ correct, briefable sheet.
 **Unclassified, open sources only, forever.** Not an official product of any government
 agency. MIT licensed — see `LICENSE` and `CONTRIBUTING.md`.
 
-**Live**: https://intel-os-self.vercel.app (all six combatant commands, 12-hour unattended cycle)
+**Live**: https://intel-os.org (all six combatant commands, 12-hour unattended cycle)
 
 The product spec and the hand-built proof sheet (OS-IRN-26-001) are maintained outside
 this repository; the spec's requirement IDs (AUTO/DATA/UX/ANL/GEO/MARK/NFR) referenced
