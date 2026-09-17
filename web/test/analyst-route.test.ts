@@ -153,6 +153,15 @@ describe("analyst route", () => {
     });
   });
 
+  it("returns a non-success status when the model declines the request", async () => {
+    mocks.createMessage.mockResolvedValue({ stop_reason: "refusal", content: [] });
+
+    const response = await POST(analystRequest());
+
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toEqual({ error: "The model declined this request." });
+  });
+
   it("reports missing model credentials as configuration failure", async () => {
     mocks.createMessage.mockRejectedValue(new Error("Could not resolve AWS credentials"));
 
