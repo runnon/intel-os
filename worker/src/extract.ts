@@ -93,7 +93,7 @@ export function makeClaudeExtractor(override?: { client: Anthropic | AnthropicBe
       const sources = (e.sourceUrls ?? [])
         .map((url: string) => articles.find((a) => a.url === url))
         .filter(Boolean)
-        .map((a: Article) => ({ url: a.url, outlet: a.outlet, title: a.title, publishedAt: a.publishedAt }));
+        .map((a: Article) => ({ url: a.url, outlet: a.outlet, title: a.title, publishedAt: a.publishedAt, social: a.social }));
       return {
         id: randomUUID(),
         aor,

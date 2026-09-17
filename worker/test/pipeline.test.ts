@@ -221,3 +221,39 @@ describe('selectForAor (shared source pool)', () => {
     expect(out[0].url).toBe('https://ex.com/b'); // own + more keyword hits
   });
 });
+
+describe('corroboration gate (social-only leads held)', () => {
+  it('stores a social-only lead but never publishes it; publishes corroborated events', async () => {
+    const { store, state } = makeFakeStore();
+    const socialOnly = fakeEvent({
+      id: 'soc',
+      title: 'Unconfirmed Telegram claim of a blast in Aleppo',
+      placeName: 'Aleppo',
+      country: 'Syria',
+      lat: 36.2,
+      lon: 37.16,
+      occurredAt: '2026-09-13T02:00:00Z',
+      sources: [{ url: 'https://t.me/chan/1', outlet: 'Telegram @chan', social: true }],
+    });
+    const corroborated = fakeEvent({
+      id: 'news',
+      title: 'Strike on Muwaffaq Salti confirmed by news',
+      sources: [
+        { url: 'https://t.me/chan/2', outlet: 'Telegram @chan', social: true },
+        { url: 'https://bbc.com/x', outlet: 'BBC' },
+      ],
+    });
+    const res = await runIngestOnce('CENTCOM', {
+      fetchFeeds: async () => articles,
+      extract: async () => [socialOnly, corroborated],
+      store,
+    });
+    expect(res.ok).toBe(true);
+    // both are STORED (so the lead can be corroborated in a later cycle)
+    expect(state.events.map((e) => e.id).sort()).toEqual(['news', 'soc']);
+    // but the published issue excludes the social-only lead
+    const snapshot = state.issues[0].snapshot.map((e) => e.id);
+    expect(snapshot).toContain('news');
+    expect(snapshot).not.toContain('soc');
+  });
+});

@@ -31,6 +31,16 @@ export interface SourceRef {
   publishedAt?: string; // ISO
   /** Reliability A–F / credibility 1–6 per ATP 2-33.4 (MIL-STD-2525E field J). */
   evaluation?: string;
+  /** Social-media origin (Telegram/Bluesky/Mastodon/X). A social source is an
+   *  early-warning LEAD only — an event carried solely by social sources is held
+   *  unpublished until a non-social (news/official) source corroborates it. */
+  social?: boolean;
+}
+
+/** True once an event has at least one non-social (news/official) source — the
+ *  corroboration gate for social-media leads. Social-only events never publish. */
+export function isCorroborated(sources: SourceRef[]): boolean {
+  return sources.some((s) => !s.social);
 }
 
 export interface Revision {

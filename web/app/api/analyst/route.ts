@@ -4,6 +4,14 @@ import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
+export const DATA_TIMEOUT_MS = 10_000;
+export const MODEL_TIMEOUT_MS = 60_000;
+export const DRAFT_DISCLAIMER =
+  "MACHINE-GENERATED DRAFT — reported facts only, not a published product, carries no analytic judgement.";
+export const MARKING_LINE = "UNCLASSIFIED · OPEN SOURCES ONLY · NOT AN OFFICIAL GOVERNMENT PRODUCT";
+
+const MAX_MESSAGES = 12;
+const MAX_MESSAGE_CHARS = 6_000;
 
 // Analyst chat: drafts theater reports on request from published issue data.
 // Guardrails, in line with the product's invariants:
@@ -46,23 +54,96 @@ interface ChatMessage {
   content: string;
 }
 
-export async function POST(req: Request) {
-  const body = (await req.json()) as { messages: ChatMessage[] };
-  const messages = (body.messages ?? []).slice(-12).filter((m) => m.role === "user" || m.role === "assistant");
-  if (messages.length === 0 || messages[messages.length - 1].role !== "user") {
-    return NextResponse.json({ error: "last message must be from the user" }, { status: 400 });
+export function parseChatMessages(body: unknown): ChatMessage[] | null {
+  if (!body || typeof body !== "object" || !("messages" in body) || !Array.isArray(body.messages)) {
+    return null;
   }
 
+  const messages = body.messages.slice(-MAX_MESSAGES);
+  if (
+    messages.length === 0 ||
+    messages.some(
+      (message) =>
+        !message ||
+        typeof message !== "object" ||
+        !("role" in message) ||
+        (message.role !== "user" && message.role !== "assistant") ||
+        !("content" in message) ||
+        typeof message.content !== "string" ||
+        message.content.trim().length === 0 ||
+        message.content.length > MAX_MESSAGE_CHARS,
+    ) ||
+    messages[messages.length - 1].role !== "user"
+  ) {
+    return null;
+  }
+
+  return messages as ChatMessage[];
+}
+
+export function enforceDraftMarkings(text: string): string {
+  let marked = text.trim();
+  if (!marked.includes(DRAFT_DISCLAIMER)) {
+    marked = `*${DRAFT_DISCLAIMER}*\n\n${marked}`;
+  }
+  if (!marked.includes(MARKING_LINE)) {
+    marked = `${marked}\n\n---\n\n${MARKING_LINE}`;
+  }
+  return marked;
+}
+
+export async function POST(req: Request) {
+  const startedAt = Date.now();
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
+  }
+
+  const messages = parseChatMessages(body);
+  if (!messages) {
+    return NextResponse.json(
+      { error: `Send 1–${MAX_MESSAGES} messages, ending with a user message of ${MAX_MESSAGE_CHARS.toLocaleString()} characters or fewer.` },
+      { status: 400 },
+    );
+  }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return NextResponse.json(
+      { error: "Analyst drafting is not configured on this server (published-data connection unavailable)." },
+      { status: 503 },
+    );
+  }
+
+  console.info("[analyst] request-start", { messageCount: messages.length });
+
   // Load the latest published issue per AOR (public data, anon key).
-  const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+  const sb = createClient(supabaseUrl, supabaseAnonKey, {
     auth: { persistSession: false },
   });
-  const { data: issues, error } = await sb
-    .from("issues")
-    .select("serial, aor, info_cutoff, window_start, tempo, change_log, source_summary, snapshot")
-    .order("published_at", { ascending: false })
-    .limit(30);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  let issues;
+  try {
+    const result = await sb
+      .from("issues")
+      .select("serial, aor, info_cutoff, window_start, tempo, change_log, source_summary, snapshot")
+      .order("published_at", { ascending: false })
+      .limit(30)
+      .abortSignal(AbortSignal.any([req.signal, AbortSignal.timeout(DATA_TIMEOUT_MS)]));
+    if (result.error) throw result.error;
+    issues = result.data;
+  } catch (error) {
+    console.error("[analyst] published-data-failed", {
+      errorName: error instanceof Error ? error.name : "UnknownError",
+      elapsedMs: Date.now() - startedAt,
+    });
+    return NextResponse.json(
+      { error: "Published issue data is temporarily unavailable. Try again shortly." },
+      { status: 503 },
+    );
+  }
 
   const seen = new Set<string>();
   const latest = (issues ?? []).filter((i) => (seen.has(i.aor) ? false : (seen.add(i.aor), true)));
@@ -87,40 +168,73 @@ export async function POST(req: Request) {
     .join("\n\n");
 
   const covered = latest.map((i) => i.aor).join(", ") || "none";
+  const eventCount = latest.reduce((count, issue) => count + (issue.snapshot?.length ?? 0), 0);
+
+  console.info("[analyst] context-ready", {
+    aorCount: latest.length,
+    eventCount,
+    contextChars: context.length,
+    elapsedMs: Date.now() - startedAt,
+  });
 
   const { client: anthropic, model } = makeModel();
   let response;
   try {
     response = await anthropic.messages.create({
-    model,
-    max_tokens: 4000,
-    system: SYSTEM,
-    messages: [
-      {
-        role: "user" as const,
-        content: `Published data available (AORs with coverage: ${covered}; all other AORs have NO coverage — say so if asked about them):\n\n${context}`,
-      },
-      { role: "assistant" as const, content: "Understood. I have the published issue data and will draft facts-only report text on request, citing event numbers and issue serials." },
-      ...messages,
-    ],
+      model,
+      max_tokens: 4000,
+      system: SYSTEM,
+      messages: [
+        {
+          role: "user" as const,
+          content: `Published data available (AORs with coverage: ${covered}; all other AORs have NO coverage — say so if asked about them):\n\n${context}`,
+        },
+        { role: "assistant" as const, content: "Understood. I have the published issue data and will draft facts-only report text on request, citing event numbers and issue serials." },
+        ...messages,
+      ],
+    }, {
+      maxRetries: 0,
+      signal: AbortSignal.any([req.signal, AbortSignal.timeout(MODEL_TIMEOUT_MS)]),
+      timeout: MODEL_TIMEOUT_MS,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    console.error("[analyst] model-failed", {
+      errorName: e instanceof Error ? e.name : "UnknownError",
+      elapsedMs: Date.now() - startedAt,
+      model,
+    });
+    if (/timeout|timed out|aborted/i.test(msg) || (e instanceof DOMException && e.name === "TimeoutError")) {
+      return NextResponse.json(
+        { error: "Drafting timed out before the model responded. Try again or narrow the request." },
+        { status: 504 },
+      );
+    }
     if (/credential|authentication|api[- ]?key|resolve|expired token|security token/i.test(msg)) {
       return NextResponse.json(
         { error: "Analyst drafting is not configured on this server (model backend credentials unavailable)." },
         { status: 503 },
       );
     }
-    return NextResponse.json({ error: `model request failed: ${msg.slice(0, 200)}` }, { status: 502 });
+    return NextResponse.json({ error: "Model request failed. Try again shortly." }, { status: 502 });
   }
 
   if (response.stop_reason === "refusal") {
-    return NextResponse.json({ error: "The model declined this request." }, { status: 200 });
+    return NextResponse.json({ error: "The model declined this request." }, { status: 422 });
   }
   const text = response.content
     .filter((b): b is Extract<typeof b, { type: "text" }> => b.type === "text")
     .map((b) => b.text)
     .join("\n");
-  return NextResponse.json({ text });
+  if (!text.trim()) {
+    return NextResponse.json({ error: "The model returned an empty draft. Try the request again." }, { status: 502 });
+  }
+  const markedText = enforceDraftMarkings(text);
+
+  console.info("[analyst] request-complete", {
+    elapsedMs: Date.now() - startedAt,
+    model,
+    outputChars: markedText.length,
+  });
+  return NextResponse.json({ text: markedText });
 }

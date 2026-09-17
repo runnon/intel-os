@@ -134,3 +134,28 @@ the scheduled run keeps firing.
 - Coordinates and provenance ship in `packages/core`; the browser performs no
   route-service call. This preserves NFR-4/NFR-5 and makes published/exported
   map geometry reproducible.
+
+## 2026-09-17 — Social-media velocity layer with a news-corroboration gate
+
+Added an optional, free, open-source social-media ingest layer as an early-warning
+signal — never an authority. The invariant: an event carried ONLY by social
+sources is stored as an unconfirmed lead but NEVER appears in a published issue
+until a non-social (news/official) source reports the same incident
+(`isCorroborated` in core; the gate is applied in `worker/src/pipeline.ts`,
+which stores everything but publishes only corroborated events). Cross-cycle
+corroboration works because leads persist in storage and later dedup-merge with a
+news event's sources.
+
+Sources (`worker/src/social.ts`), all free and opt-in via env vars (blank =
+disabled, so the NIPRNet build is unaffected — interim/swappable pattern):
+- Telegram — GramJS over the official MTProto API (free api_id/api_hash +
+  StringSession), reads configured public channels.
+- Bluesky — open AT Protocol public API via @atproto/api (free app password),
+  per-AOR keyword search (an API call, not scraping).
+- Mastodon — plain hashtag RSS, no credentials, on by default.
+
+Apify (paid SaaS) and self-hosted X scrapers were rejected: X killed clean
+open-source access, so X scraping means either a paid managed service or fragile
+account-based scrapers that violate ToS. Telegram + Bluesky give higher real-time
+OSINT value on genuinely open, free APIs. X can be added later behind the same
+corroboration gate if needed.

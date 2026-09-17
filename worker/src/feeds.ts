@@ -1,6 +1,7 @@
 import { XMLParser } from 'fast-xml-parser';
 import type { Aor } from '@intel-os/core';
 import { AORS, GAZETTEERS, assertPublicSource } from '@intel-os/core';
+import { SOCIAL_RSS, fetchSocial, socialEnabled } from './social';
 
 /** A raw article pulled from a public feed, pre-extraction. */
 export interface Article {
@@ -9,6 +10,9 @@ export interface Article {
   outlet: string;
   publishedAt: string; // ISO
   summary: string;
+  /** True for social-media origin (Telegram/Bluesky/Mastodon). A social-only
+   *  event is held until a news/official source corroborates it. */
+  social?: boolean;
 }
 
 /**
@@ -112,14 +116,21 @@ async function fetchRss(url: string, outlet: string): Promise<Article[]> {
   return list
     .map((it: any) => {
       const link = typeof it?.link === 'object' ? it.link?.['@_href'] : it?.link;
-      if (!link || !it?.title) return null;
+      if (!link) return null;
       const date = it.pubDate ?? it.published ?? it.updated;
+      const rawTitle = decodeEntities(String(typeof it.title === 'object' ? it.title['#text'] ?? '' : it.title ?? ''));
+      const bodyText = decodeEntities(String(it.description ?? it.summary ?? it.content ?? ''))
+        .replace(/<[^>]+>/g, '')
+        .trim();
+      // Mastodon and other title-less feeds: fall back to the post body as title.
+      const title = rawTitle.trim() || bodyText.slice(0, 140);
+      if (!title) return null;
       return {
-        title: decodeEntities(String(typeof it.title === 'object' ? it.title['#text'] ?? '' : it.title)),
+        title,
         url: decodeEntities(String(link)),
         outlet,
         publishedAt: date ? new Date(date).toISOString() : new Date().toISOString(),
-        summary: decodeEntities(String(it.description ?? it.summary ?? ''))
+        summary: decodeEntities(String(it.description ?? it.summary ?? it.content ?? ''))
           .replace(/<[^>]+>/g, '')
           .slice(0, 500),
       };
@@ -232,6 +243,18 @@ export async function fetchGlobalPool(): Promise<PooledArticle[]> {
     } catch (e) {
       console.warn(`[${aor}] gdelt failed: ${e}`);
     }
+  }
+
+  // Social layer (velocity / early-warning). Every article is tagged social so
+  // the corroboration gate holds social-only events until a news source confirms.
+  // Mastodon hashtag RSS needs no credentials; Bluesky/Telegram are opt-in.
+  const socialRss = await Promise.allSettled(SOCIAL_RSS.map((f) => fetchRss(f.url, f.outlet)));
+  socialRss.forEach((r, i) => {
+    if (r.status === 'fulfilled') ingest(r.value.map((a) => ({ ...a, social: true })), []);
+    else console.warn(`social feed failed: ${SOCIAL_RSS[i].url}: ${r.reason}`);
+  });
+  if (socialEnabled()) {
+    for (const { aor, articles } of await fetchSocial()) ingest(articles, aor ? [aor] : []);
   }
 
   if (okSources === 0) throw new Error('global pool: all sources failed');

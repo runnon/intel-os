@@ -1,12 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Markdown from "@/components/Markdown";
-
-interface Msg {
-  role: "user" | "assistant";
-  content: string;
-}
+import { requestAnalystDraft, type AnalystMessage } from "@/lib/analyst-client";
 
 const SUGGESTIONS = [
   "Draft a report on threats to US basing in CENTCOM over the issue window.",
@@ -15,28 +11,31 @@ const SUGGESTIONS = [
 ];
 
 export default function AnalystPage() {
-  const [messages, setMessages] = useState<Msg[]>([]);
+  const [messages, setMessages] = useState<AnalystMessage[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!busy) return;
+    const timer = window.setInterval(() => setElapsedSeconds((seconds) => seconds + 1), 1_000);
+    return () => window.clearInterval(timer);
+  }, [busy]);
 
   async function send(text: string) {
     const content = text.trim();
     if (!content || busy) return;
-    const next: Msg[] = [...messages, { role: "user", content }];
+    const next: AnalystMessage[] = [...messages, { role: "user", content }];
     setMessages(next);
     setInput("");
+    setElapsedSeconds(0);
     setBusy(true);
     try {
-      const res = await fetch("/api/analyst", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ messages: next }),
-      });
-      const data = (await res.json()) as { text?: string; error?: string };
-      setMessages([...next, { role: "assistant", content: data.text ?? `⚠ ${data.error ?? "request failed"}` }]);
+      const draft = await requestAnalystDraft(next);
+      setMessages([...next, { role: "assistant", content: draft }]);
     } catch (e) {
-      setMessages([...next, { role: "assistant", content: `⚠ ${e instanceof Error ? e.message : "request failed"}` }]);
+      setMessages([...next, { role: "assistant", content: `⚠ ${e instanceof Error ? e.message : "Drafting failed. Try again."}` }]);
     } finally {
       setBusy(false);
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
@@ -91,7 +90,11 @@ export default function AnalystPage() {
               </div>
             </div>
           ))}
-          {busy && <p className="font-mono text-xs text-[#918c7d]">drafting…</p>}
+          {busy && (
+            <p className="font-mono text-xs text-[#6b675c]" role="status" aria-live="polite">
+              Drafting from published issues… {elapsedSeconds}s
+            </p>
+          )}
           <div ref={bottomRef} />
         </div>
       </div>

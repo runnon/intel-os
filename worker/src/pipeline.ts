@@ -1,5 +1,5 @@
 import type { Aor, IngestRunResult } from '@intel-os/core';
-import { buildSituationUpdate, dedupe } from '@intel-os/core';
+import { buildSituationUpdate, dedupe, isCorroborated } from '@intel-os/core';
 import type { Article, FeedFetcher } from './feeds';
 import type { ExtractorFn } from './extract';
 import type { Store } from './store';
@@ -39,6 +39,8 @@ export async function runIngestOnce(aor: Aor, deps: PipelineDeps): Promise<Inges
     const { fresh, merged } = dedupe(candidates, existing);
     dedupedCount = candidates.length - fresh.length;
 
+    // Store everything — including social-only leads — so a lead persists and can
+    // be corroborated by a news source in a later cycle.
     await deps.store.insertEvents(fresh);
     await deps.store.mergeEventSources(merged);
 
@@ -47,19 +49,24 @@ export async function runIngestOnce(aor: Aor, deps: PipelineDeps): Promise<Inges
       ...fresh,
     ].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
 
+    // Corroboration gate: an event carried only by social-media sources is an
+    // unconfirmed lead — it is stored but NEVER appears in a published issue
+    // until a non-social (news/official) source reports the same incident.
+    const published = allEvents.filter((e) => isCorroborated(e.sources));
+
     const issueNumber = await deps.store.nextIssueNumber(aor);
     const issue = buildSituationUpdate({
       aor,
       issueNumber,
-      events: allEvents,
-      newIds: new Set(fresh.map((e) => e.id)),
-      revisedIds: new Set(merged.map((e) => e.id)),
+      events: published,
+      newIds: new Set(fresh.filter((e) => isCorroborated(e.sources)).map((e) => e.id)),
+      revisedIds: new Set(merged.filter((e) => isCorroborated(e.sources)).map((e) => e.id)),
       windowStart,
       infoCutoff: now,
       now,
     });
 
-    const issueId = await deps.store.publishIssue(issue, allEvents);
+    const issueId = await deps.store.publishIssue(issue, published);
     await deps.store.recordRun({ aor, ok: true, fetched, extracted, deduped: dedupedCount, publishedIssue: issueId });
 
     return { ok: true, fetched, extracted, deduped: dedupedCount, published: true };
