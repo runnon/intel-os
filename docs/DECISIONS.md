@@ -26,8 +26,9 @@ EUCOM-only NATO layer below.
   not a prediction."
 
 **Data / NFR-4/NFR-5:** `scripts/build-blocs.ts` joins the bloc table to public-domain
-Natural Earth boundaries (110m, 50m fallback for microstates like Bahrain), rounds coords
-to ~1 km, and emits `web/public/geo/blocs-<aor>.geojson` (5–34 KB each). Same-origin
+Natural Earth boundaries — **50m** primary (110m was visibly too coarse to sit on the OSM
+basemap; 10m fallback for any microstate 50m lacks), coords rounded to ~110 m — and emits
+`web/public/geo/blocs-<aor>.geojson` (28–336 KB each). Same-origin
 static assets, fetched + cached per AOR client-side, fail quiet; no third-party runtime
 dependency. `syncBlocs` clears the layer if an AOR has no table. Re-run the script when
 the table changes. Build + 70 tests green; verified live on EUCOM (Ukraine/Georgia

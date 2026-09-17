@@ -14,18 +14,21 @@ import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import { BLOCS } from '../packages/core/src/blocs';
 
+// 50m is the primary source — it tracks real borders closely enough to sit on the
+// OSM basemap; 110m was visibly too coarse. 10m is a fallback for any microstate 50m
+// might lack.
 const NE_URL =
-  'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson';
-// 50m fills the microstates 110m omits (Bahrain, etc.).
-const NE_50M_URL =
   'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson';
+const NE_FALLBACK_URL =
+  'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_0_countries.geojson';
 const here = dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = resolve(here, '../web/public/geo');
-const CACHE = resolve(here, '../node_modules/.cache/ne_110m_admin_0_countries.geojson');
-const CACHE_50M = resolve(here, '../node_modules/.cache/ne_50m_admin_0_countries.geojson');
+const CACHE = resolve(here, '../node_modules/.cache/ne_50m_admin_0_countries.geojson');
+const CACHE_FALLBACK = resolve(here, '../node_modules/.cache/ne_10m_admin_0_countries.geojson');
 
 type Ring = number[];
-const round = (n: number) => Math.round(n * 100) / 100;
+// ~110 m grid: imperceptible at theater zoom, keeps files small, borders stay clean.
+const round = (n: number) => Math.round(n * 1000) / 1000;
 const roundCoords = (c: unknown): unknown =>
   Array.isArray((c as Ring[])[0]) ? (c as Ring[]).map(roundCoords) : [round((c as Ring)[0]), round((c as Ring)[1])];
 
@@ -46,12 +49,12 @@ async function main() {
   const byName = new Map<string, NeDoc['features'][number]>();
   for (const f of ne.features) byName.set(String(f.properties.ADMIN), f);
 
-  // Fill any names 110m lacks (microstates) from 50m, but only if needed.
+  // Fill any names 50m lacks from 10m, but only if needed.
   const referenced = new Set(Object.values(BLOCS).flatMap((d) => d.alignments.map((a) => a.country)));
-  const needs50m = [...referenced].some((n) => !byName.has(n));
-  if (needs50m) {
-    const ne50 = await loadNe(NE_50M_URL, CACHE_50M);
-    for (const f of ne50.features) {
+  const needsFallback = [...referenced].some((n) => !byName.has(n));
+  if (needsFallback) {
+    const ne10 = await loadNe(NE_FALLBACK_URL, CACHE_FALLBACK);
+    for (const f of ne10.features) {
       const name = String(f.properties.ADMIN);
       if (referenced.has(name) && !byName.has(name)) byName.set(name, f);
     }
