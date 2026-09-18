@@ -89,6 +89,30 @@ body {
   color: #6b675c;
 }
 
+/* Close button (installation popup): sit it in the corner with a small margin, subtle. */
+.infrastructure-popup .maplibregl-popup-close-button {
+  top: 5px;
+  right: 6px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  font-size: 15px;
+  line-height: 18px;
+  color: #6b675c;
+  border-radius: 0;
+  background: transparent;
+}
+
+.infrastructure-popup .maplibregl-popup-close-button:hover {
+  color: #171712;
+  background: transparent;
+}
+
+/* Reserve room in the top-right so a long title never runs under the × close button. */
+.infrastructure-popup .maplibregl-popup-content:has(.maplibregl-popup-close-button) > div {
+  padding-right: 18px;
+}
+
 /* ---------------------------------------------------------------------------
    Export (UX-5): a MULTI-PAGE landscape GEOINT product like the OS-IRN-26-001
    proof build. The report is built as explicit landscape "page" cards, each
