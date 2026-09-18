@@ -1,25 +1,29 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  createClient: vi.fn(),
+  createSupabaseServerClient: vi.fn(),
   createMessage: vi.fn(),
   makeModel: vi.fn(),
   hasActiveEntitlement: vi.fn(),
+  consumeAnalystQuota: vi.fn(),
 }));
 
-vi.mock("@supabase/supabase-js", () => ({ createClient: mocks.createClient }));
+vi.mock("@/lib/supabase/server", () => ({ createSupabaseServerClient: mocks.createSupabaseServerClient }));
 vi.mock("@/lib/model", () => ({ makeModel: mocks.makeModel }));
-vi.mock("@/lib/entitlement", () => ({ hasActiveEntitlement: mocks.hasActiveEntitlement }));
+vi.mock("@/lib/entitlement", () => ({
+  hasActiveEntitlement: mocks.hasActiveEntitlement,
+  consumeAnalystQuota: mocks.consumeAnalystQuota,
+}));
 
 import {
   DATA_TIMEOUT_MS,
   DRAFT_DISCLAIMER,
   MARKING_LINE,
   MODEL_TIMEOUT_MS,
-  POST,
   enforceDraftMarkings,
   parseChatMessages,
-} from "@/app/api/analyst/route";
+} from "@/lib/analyst-policy";
+import { POST } from "@/app/api/analyst/route";
 
 const issue = {
   aor: "CENTCOM",
@@ -56,7 +60,7 @@ function mockIssueQuery(data: unknown[] | null, error: unknown = null) {
   query.order.mockReturnValue(query);
   query.limit.mockReturnValue(query);
   query.abortSignal.mockResolvedValue({ data, error });
-  mocks.createClient.mockReturnValue({ from: vi.fn().mockReturnValue(query) });
+  mocks.createSupabaseServerClient.mockResolvedValue({ from: vi.fn().mockReturnValue(query) });
 }
 
 function analystRequest(messages: unknown = [{ role: "user", content: "Draft a short CENTCOM summary." }]) {
@@ -74,6 +78,7 @@ beforeEach(() => {
   vi.spyOn(console, "info").mockImplementation(() => undefined);
   vi.spyOn(console, "error").mockImplementation(() => undefined);
   mocks.hasActiveEntitlement.mockResolvedValue(true);
+  mocks.consumeAnalystQuota.mockResolvedValue("ok");
   mockIssueQuery([issue]);
   mocks.makeModel.mockReturnValue({
     client: { messages: { create: mocks.createMessage } },
@@ -123,6 +128,16 @@ describe("analyst route", () => {
       error: "The analyst workspace requires an active subscription.",
       code: "subscription_required",
     });
+    expect(mocks.createMessage).not.toHaveBeenCalled();
+  });
+
+  it("enforces the monthly drafting allowance before calling the model", async () => {
+    mocks.consumeAnalystQuota.mockResolvedValue("monthly_limit");
+
+    const response = await POST(analystRequest());
+
+    expect(response.status).toBe(429);
+    await expect(response.json()).resolves.toMatchObject({ code: "monthly_limit" });
     expect(mocks.createMessage).not.toHaveBeenCalled();
   });
 

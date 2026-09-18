@@ -54,6 +54,20 @@ export function variantOfPrice(priceId: string | null): PriceVariant | null {
   return null;
 }
 
+/** Billing cadence for either experiment variant's Stripe price. */
+export function planOfPrice(priceId: string | null): Plan | null {
+  if (!priceId) return null;
+  if (priceId === process.env.STRIPE_PRICE_MONTHLY || priceId === process.env.STRIPE_PRICE_MONTHLY_B) return "monthly";
+  if (priceId === process.env.STRIPE_PRICE_ANNUAL || priceId === process.env.STRIPE_PRICE_ANNUAL_B) return "annual";
+  return null;
+}
+
+/** Prefer immutable subscription metadata so retired price env vars do not break webhooks. */
+export function planFromSubscription(metadataPlan: string | null | undefined, priceId: string | null): Plan | null {
+  if (metadataPlan === "monthly" || metadataPlan === "annual") return metadataPlan;
+  return planOfPrice(priceId);
+}
+
 /** Display labels for the paywall, for the user's assigned variant. */
 export function pricingDisplay(userId: string) {
   const variant = variantFor(userId);

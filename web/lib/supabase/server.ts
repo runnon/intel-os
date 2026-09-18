@@ -3,6 +3,13 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
+export async function hasSupabaseAuthCookie(): Promise<boolean> {
+  const cookieStore = await cookies();
+  return cookieStore
+    .getAll()
+    .some(({ name }) => name.startsWith("sb-") && name.includes("-auth-token"));
+}
+
 // Server-side Supabase client bound to the request's auth cookies, so RLS sees the
 // signed-in user (auth.uid()). Anon key only — the service-role key never lives in web.
 export async function createSupabaseServerClient() {
@@ -31,6 +38,7 @@ export async function createSupabaseServerClient() {
 
 /** The signed-in user, or null. Convenience for route handlers and server components. */
 export async function getSessionUser() {
+  if (!(await hasSupabaseAuthCookie())) return null;
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },

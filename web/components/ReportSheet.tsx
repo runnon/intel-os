@@ -85,7 +85,7 @@ function EventCard({ e }: { e: NumberedEvent }) {
 // date state, styled on the OS-IRN-26-001 proof build. This is a SITUATION
 // UPDATE sheet: per AUTO-5 it carries no key judgements, no assessment, no
 // analysis-of-alternatives — those exist only in the signed assessment product.
-export default function ReportSheet({ issue }: { issue: IssueRow }) {
+export default function ReportSheet({ issue, backHref }: { issue: IssueRow; backHref?: string }) {
   const searchParams = useSearchParams();
   const view = decodeView(new URLSearchParams(searchParams.toString()));
 
@@ -151,10 +151,10 @@ export default function ReportSheet({ issue }: { issue: IssueRow }) {
           EXPORT PDF (PRINT)
         </button>
         <a
-          href={`/t/${issue.aor.toLowerCase()}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`}
+          href={`${backHref ?? `/t/${issue.aor.toLowerCase()}`}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`}
           className="font-mono text-xs px-4 py-2 rounded-md border border-[#171712] text-[#171712] hover:bg-black/5"
         >
-          BACK TO LIVE PICTURE
+          {backHref ? "BACK TO ISSUE" : "BACK TO LIVE PICTURE"}
         </a>
         <span className="font-mono text-[10px] text-black/45 self-center ml-auto">{pageCount} PAGES · PREVIEW MATCHES EXPORT</span>
       </div>

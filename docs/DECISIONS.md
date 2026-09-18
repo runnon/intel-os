@@ -301,17 +301,18 @@ corroboration gate if needed.
 
 ## 2026-09-17 — Analyst subscription (Stripe) + Supabase Auth paywall
 
-Introduced the first paid tier: **Analyst, $20/mo or $190/yr**, gating the analyst
-drafting workspace (`/analyst`). Situation updates and the map stay free and public —
-the free/paid line follows the product's own architecture (AUTO-5 commodity situation
-data free; the drafting/assessment surface paid).
+Introduced the first paid tier: **Analyst, $20/mo or $190/yr**, with a one-time seven-day
+trial. The complete trailing 72-hour situation picture stays free. Analyst unlocks 7D,
+30D, and full immutable issue history plus the drafting workspace (`/analyst`). The
+boundary is an objective time window, not a judgement about which events are important.
 
 Decisions:
 - **Auth:** added Supabase Auth (email magic-link) via `@supabase/ssr` — first auth in
   the product. Self-hostable, no third-party CDN (NFR-4/5 safe). Prereq for a paywall,
   since gating requires knowing who is subscribed.
 - **Payments:** existing shared Stripe account `acct_1SSUvpPzSHwImUes` (same account as
-  the other product). Isolated by `metadata app=intel-os` + a dedicated webhook; the
+  the other product). Routed by `metadata app=intel-os` + a dedicated webhook; metadata
+  is not treated as a security boundary, so the runtime key stays least-privileged. The
   webhook ignores any event not tagged intel-os. Reviewed runnon's Stripe integration
   first — it uses Supabase Edge Functions only because it's a server-less CRA; intel-os
   is Next.js, so Stripe lives in `web/app/api/stripe/*` route handlers (same principle:
@@ -319,9 +320,12 @@ Decisions:
 - **Hosted Checkout** (redirect to checkout.stripe.com), not embedded — zero Stripe JS
   in the app bundle, keeping the deployed surface CDN-free (NFR-4/5).
 - **Entitlement writes without a service-role key in Vercel:** the webhook writes via a
-  `SECURITY DEFINER` `grant_entitlement()` RPC that self-authorizes against a shared
+  `SECURITY DEFINER` `process_stripe_entitlement_event()` RPC that self-authorizes against a shared
   secret in a private, RLS-locked `entitlement_admin` table. Honors the AGENTS.md rule
   that the service-role key lives only in the worker.
+- **Archive enforcement:** canonical issue snapshots remain immutable, but direct full
+  reads require an active entitlement. Security-definer public projections expose only
+  the 72-hour event slice or archive metadata; old payloads are never sent to free clients.
 
 Re-entry path: for the eventual gov/NIPRNet deployment, billing is out of scope — that
 build is license/contract-gated with no Stripe surface at all. Setup: docs/STRIPE_SETUP.md.
@@ -341,4 +345,12 @@ Hardened the Analyst subscription into something operable:
   id (`web/lib/pricing.ts`), decided server-side so the charged price can't be gamed from
   the client. Live only when the `_B` price env vars are set (else everyone gets $20).
   Exposure logged in `pricing_exposures`; conversion is the `price_id` on `entitlements`.
-  Deliberately NOT PostHog/client analytics — self-contained, no third-party script (NFR-4/5).
+- **Optional analytics:** conversion events may also be sent server-side to an explicitly
+  configured `POSTHOG_HOST`. No browser script, email address, prompt, issue body, or source
+  content is sent. With the env vars absent, the integration makes no outbound requests;
+  restricted deployments can leave it off or point the single host variable at a
+  self-hosted collector (NFR-4/NFR-5 re-entry path).
+- **Billing correctness:** Stripe event IDs make webhook processing idempotent; event
+  creation times prevent stale deliveries from rolling entitlement state backward.
+- **Model-cost boundary:** drafting is limited atomically per user (default 20 total during
+  trial, then 5/minute and 200/UTC month; server-configurable) before a Bedrock request is made.

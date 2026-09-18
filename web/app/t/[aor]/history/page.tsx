@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Aor } from "@intel-os/core";
-import { supabase } from "@/lib/db";
+import { issueArchive } from "@/lib/db";
+import { getViewerEntitlement } from "@/lib/entitlement";
 
 export const dynamic = "force-dynamic";
 
@@ -22,13 +23,9 @@ export default async function HistoryPage({ params }: PageProps<"/t/[aor]/histor
   const { aor: slug } = await params;
   const aor = VALID[slug.toLowerCase()];
   if (!aor) notFound();
-  const { data, error } = await supabase
-    .from("issues")
-    .select("serial, issue_number, published_at, info_cutoff, tempo")
-    .eq("aor", aor)
-    .order("issue_number", { ascending: false })
-    .limit(200);
-  if (error) throw new Error(error.message);
+  const [data, access] = await Promise.all([issueArchive(aor), getViewerEntitlement()]);
+  const latestIssueNumber = data[0]?.issue_number;
+  const upgradeHref = access.user ? "/analyst" : `/signin?next=${encodeURIComponent(`/t/${slug}/history`)}`;
 
   return (
     <main className="flex-1 overflow-y-auto">
@@ -41,8 +38,17 @@ export default async function HistoryPage({ params }: PageProps<"/t/[aor]/histor
         </header>
         <p className="text-xs text-[#6b675c] mb-6 max-w-xl">
           Every published issue is retained and addressable — a sheet briefed on a given date
-          can be produced again unchanged. Serials link to the immutable snapshot as published.
+          can be produced again unchanged. The latest 72 hours are public; older immutable
+          snapshots are included with Analyst access.
         </p>
+        {!access.active && (
+          <div className="mb-5 border-l-4 border-[#8a6100] bg-[#efeadb] px-4 py-3 flex items-center justify-between gap-4">
+            <p className="text-xs text-[#514d43]">Older issue metadata stays visible. Start a seven-day trial to open the full archive.</p>
+            <Link href={upgradeHref} className="shrink-0 font-mono text-[10px] border border-[#171712] px-3 py-1.5 hover:bg-[#171712] hover:text-white">
+              START FREE TRIAL
+            </Link>
+          </div>
+        )}
         <table className="w-full font-mono text-xs">
           <thead>
             <tr className="text-[#918c7d] text-left border-b border-[#c9c2ac]">
@@ -53,18 +59,25 @@ export default async function HistoryPage({ params }: PageProps<"/t/[aor]/histor
             </tr>
           </thead>
           <tbody>
-            {(data ?? []).map((i) => (
+            {data.map((i) => {
+              const canOpen = access.active || i.issue_number === latestIssueNumber;
+              return (
               <tr key={i.serial} className="border-b border-[#dcd6c4] hover:bg-[#efeadb]">
                 <td className="py-2 pr-4">
-                  <Link href={`/i/${i.serial}`} className="text-[#171712] hover:underline">
-                    {i.serial}
-                  </Link>
+                  {canOpen ? (
+                    <Link href={`/i/${i.serial}`} className="text-[#171712] hover:underline">{i.serial}</Link>
+                  ) : (
+                    <Link href={upgradeHref} className="text-[#8a6100] hover:underline" title="Analyst archive access required">
+                      {i.serial} · LOCKED
+                    </Link>
+                  )}
                 </td>
                 <td className="py-2 pr-4 text-[#6b675c]">{zulu(i.info_cutoff)}</td>
                 <td className="py-2 pr-4">{i.tempo?.totalEvents ?? "—"}</td>
                 <td className="py-2 pr-4">{i.tempo?.newSinceLastIssue ?? "—"}</td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

@@ -3,7 +3,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // pricing.ts guards itself with `server-only`; neutralize it for the node test runner.
 vi.mock("server-only", () => ({}));
 
-import { variantFor, experimentLive, priceIdFor, pricingDisplay } from "@/lib/pricing";
+import {
+  variantFor,
+  experimentLive,
+  planFromSubscription,
+  planOfPrice,
+  priceIdFor,
+  pricingDisplay,
+  variantOfPrice,
+} from "@/lib/pricing";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -45,5 +53,23 @@ describe("price A/B experiment", () => {
     }
     expect(priceIdFor(userA, "monthly")).toBe("price_ma");
     expect(priceIdFor(userB, "monthly")).toBe("price_mb");
+  });
+
+  it("maps both A and B prices back to the correct plan and variant", () => {
+    vi.stubEnv("STRIPE_PRICE_MONTHLY", "price_ma");
+    vi.stubEnv("STRIPE_PRICE_ANNUAL", "price_aa");
+    vi.stubEnv("STRIPE_PRICE_MONTHLY_B", "price_mb");
+    vi.stubEnv("STRIPE_PRICE_ANNUAL_B", "price_ab");
+
+    expect(planOfPrice("price_ma")).toBe("monthly");
+    expect(planOfPrice("price_mb")).toBe("monthly");
+    expect(planOfPrice("price_aa")).toBe("annual");
+    expect(planOfPrice("price_ab")).toBe("annual");
+    expect(variantOfPrice("price_mb")).toBe("b");
+  });
+
+  it("keeps webhook plan mapping stable after a price id is retired", () => {
+    expect(planFromSubscription("annual", "price_no_longer_configured")).toBe("annual");
+    expect(planFromSubscription("invalid", "price_no_longer_configured")).toBeNull();
   });
 });

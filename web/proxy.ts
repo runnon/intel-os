@@ -8,6 +8,13 @@ type CookieToSet = { name: string; value: string; options: CookieOptions };
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
 
+  // Anonymous map traffic has no session to refresh. Keeping it off the auth
+  // network path preserves the public picture when the identity service is slow.
+  const hasAuthCookie = request.cookies
+    .getAll()
+    .some(({ name }) => name.startsWith("sb-") && name.includes("-auth-token"));
+  if (!hasAuthCookie) return response;
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -34,6 +41,6 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Run on everything except static assets and the map tiles/geo files.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|geo/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"],
+  // Only routes that can consume or refresh an authenticated entitlement.
+  matcher: ["/t/:path*", "/i/:path*", "/analyst/:path*", "/signin", "/auth/:path*", "/api/analyst", "/api/entitlement", "/api/pricing", "/api/stripe/:path*"],
 };

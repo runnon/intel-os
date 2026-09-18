@@ -87,8 +87,9 @@ export default async function Home() {
           <p className="text-sm leading-relaxed text-[#6b675c] mt-2 max-w-2xl">
             Pick a combatant command for a live, filterable geospatial picture of that theater,
             built entirely from publicly available information on an unattended 12-hour cycle.
-            Situation updates carry reported facts only — an assessment layer publishes solely
-            over a named analyst&apos;s signature.
+            The latest 72 hours are public; Analyst access adds the historical archive and drafting.
+            Situation updates carry reported facts only — an assessment layer publishes solely over
+            a named analyst&apos;s signature.
           </p>
         </header>
         {dbError && (

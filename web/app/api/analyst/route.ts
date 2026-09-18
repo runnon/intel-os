@@ -1,18 +1,17 @@
 import { makeModel } from "@/lib/model";
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import { hasActiveEntitlement } from "@/lib/entitlement";
+import { consumeAnalystQuota, hasActiveEntitlement } from "@/lib/entitlement";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  DATA_TIMEOUT_MS,
+  enforceDraftMarkings,
+  invalidMessagesError,
+  MODEL_TIMEOUT_MS,
+  parseChatMessages,
+} from "@/lib/analyst-policy";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
-export const DATA_TIMEOUT_MS = 10_000;
-export const MODEL_TIMEOUT_MS = 60_000;
-export const DRAFT_DISCLAIMER =
-  "MACHINE-GENERATED DRAFT — reported facts only, not a published product, carries no analytic judgement.";
-export const MARKING_LINE = "UNCLASSIFIED · OPEN SOURCES ONLY · NOT AN OFFICIAL GOVERNMENT PRODUCT";
-
-const MAX_MESSAGES = 12;
-const MAX_MESSAGE_CHARS = 6_000;
 
 // Analyst chat: drafts theater reports on request from published issue data.
 // Guardrails, in line with the product's invariants:
@@ -50,49 +49,6 @@ provided in this conversation. Rules, non-negotiable:
 - End with the marking line: "UNCLASSIFIED · OPEN SOURCES ONLY · NOT AN OFFICIAL GOVERNMENT PRODUCT".
 Format in clean GitHub-flavored markdown (headings, bold, bullet lists, links).`;
 
-interface ChatMessage {
-  role: "user" | "assistant";
-  content: string;
-}
-
-export function parseChatMessages(body: unknown): ChatMessage[] | null {
-  if (!body || typeof body !== "object" || !("messages" in body) || !Array.isArray(body.messages)) {
-    return null;
-  }
-
-  const messages = body.messages.slice(-MAX_MESSAGES);
-  if (
-    messages.length === 0 ||
-    messages.some(
-      (message) =>
-        !message ||
-        typeof message !== "object" ||
-        !("role" in message) ||
-        (message.role !== "user" && message.role !== "assistant") ||
-        !("content" in message) ||
-        typeof message.content !== "string" ||
-        message.content.trim().length === 0 ||
-        message.content.length > MAX_MESSAGE_CHARS,
-    ) ||
-    messages[messages.length - 1].role !== "user"
-  ) {
-    return null;
-  }
-
-  return messages as ChatMessage[];
-}
-
-export function enforceDraftMarkings(text: string): string {
-  let marked = text.trim();
-  if (!marked.includes(DRAFT_DISCLAIMER)) {
-    marked = `*${DRAFT_DISCLAIMER}*\n\n${marked}`;
-  }
-  if (!marked.includes(MARKING_LINE)) {
-    marked = `${marked}\n\n---\n\n${MARKING_LINE}`;
-  }
-  return marked;
-}
-
 export async function POST(req: Request) {
   const startedAt = Date.now();
 
@@ -115,7 +71,7 @@ export async function POST(req: Request) {
   const messages = parseChatMessages(body);
   if (!messages) {
     return NextResponse.json(
-      { error: `Send 1–${MAX_MESSAGES} messages, ending with a user message of ${MAX_MESSAGE_CHARS.toLocaleString()} characters or fewer.` },
+      { error: invalidMessagesError() },
       { status: 400 },
     );
   }
@@ -131,10 +87,9 @@ export async function POST(req: Request) {
 
   console.info("[analyst] request-start", { messageCount: messages.length });
 
-  // Load the latest published issue per AOR (public data, anon key).
-  const sb = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: { persistSession: false },
-  });
+  // Load full published issue history through the signed-in session. RLS is the
+  // second entitlement boundary; the anon role cannot read canonical snapshots.
+  const sb = await createSupabaseServerClient();
   let issues;
   try {
     const result = await sb
@@ -187,6 +142,30 @@ export async function POST(req: Request) {
     contextChars: context.length,
     elapsedMs: Date.now() - startedAt,
   });
+
+  // Consume quota only when the request is ready to call the paid model. The
+  // database operation is atomic across concurrent server instances.
+  let quota;
+  try {
+    quota = await consumeAnalystQuota();
+  } catch {
+    return NextResponse.json({ error: "Drafting usage could not be verified. Try again shortly." }, { status: 503 });
+  }
+  if (quota !== "ok") {
+    const monthly = quota === "monthly_limit";
+    const trial = quota === "trial_limit";
+    return NextResponse.json(
+      {
+        error: monthly
+          ? "This month's drafting allowance has been used. It resets at the start of next month."
+          : trial
+            ? "The trial drafting allowance has been used. Subscribe to keep drafting."
+            : "Too many drafting requests. Wait a minute and try again.",
+        code: quota,
+      },
+      { status: 429 },
+    );
+  }
 
   const { client: anthropic, model } = makeModel();
   let response;

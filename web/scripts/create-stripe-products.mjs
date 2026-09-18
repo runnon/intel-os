@@ -31,10 +31,15 @@ async function ensureProduct() {
   const found = await stripe.products.search({
     query: `metadata['app']:'${APP}' AND metadata['tier']:'analyst' AND active:'true'`,
   });
-  if (found.data[0]) return found.data[0];
+  if (found.data[0]) {
+    return stripe.products.update(found.data[0].id, {
+      name: "Theater Picture — Analyst",
+      description: "72-hour public picture plus Analyst archive and drafting access. Seven-day trial.",
+    });
+  }
   return stripe.products.create({
     name: "Theater Picture — Analyst",
-    description: "Analyst drafting workspace subscription (intel-os / Theater Picture).",
+    description: "72-hour public picture plus Analyst archive and drafting access. Seven-day trial.",
     metadata: { app: APP, tier: "analyst" },
   });
 }

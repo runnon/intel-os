@@ -2,8 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-
-const MARKING = "UNCLASSIFIED · OPEN SOURCES ONLY · NOT AN OFFICIAL GOVERNMENT PRODUCT";
+import { safeInternalPath } from "@/lib/safe-redirect";
 
 function SignInForm() {
   const [email, setEmail] = useState("");
@@ -16,7 +15,7 @@ function SignInForm() {
     setBusy(true);
     setError(null);
     const supabase = createSupabaseBrowserClient();
-    const next = new URLSearchParams(window.location.search).get("next") ?? "/analyst";
+    const next = safeInternalPath(new URLSearchParams(window.location.search).get("next"));
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
       options: {
@@ -30,9 +29,6 @@ function SignInForm() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <div className="bg-[#000057] text-white/90 text-center font-mono text-[10px] tracking-widest py-1">
-        {MARKING}
-      </div>
       <div className="flex-1 flex items-center justify-center px-4">
         <div className="w-full max-w-sm border border-[#c9c2ac] bg-[#f5f2ea] p-6">
           <a href="/" className="font-mono text-xs tracking-widest text-[#6b675c] hover:text-[#8a6100]">
@@ -40,8 +36,8 @@ function SignInForm() {
           </a>
           <h1 className="headline text-2xl mt-2">Analyst sign-in</h1>
           <p className="text-sm text-black/70 mt-2 leading-relaxed">
-            The situation map is free and open. Sign in to use the analyst drafting workspace —
-            a magic link goes to your email, no password.
+            The current 72-hour situation map is free and open. Sign in for the archive,
+            drafting workspace, and seven-day Analyst trial — a magic link goes to your email.
           </p>
 
           {sent ? (

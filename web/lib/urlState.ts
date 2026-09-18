@@ -55,6 +55,12 @@ export function decodeView(p: URLSearchParams): ViewState {
   };
 }
 
+/** Public viewers can never request an archive window through a crafted URL. */
+export function enforceAccessWindow(view: ViewState, hasArchiveAccess: boolean): ViewState {
+  if (hasArchiveAccess || (view.windowHours != null && view.windowHours <= 72)) return view;
+  return { ...view, windowHours: 72, selectedEvent: null };
+}
+
 const CONF_ORDER = { low: 0, moderate: 1, high: 2 } as const;
 
 export interface FilterableEvent {

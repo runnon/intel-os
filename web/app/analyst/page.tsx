@@ -19,6 +19,7 @@ type Gate = {
   plan: string | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
+  trialEnd: string | null;
 };
 
 const INITIAL_GATE: Gate = {
@@ -30,9 +31,10 @@ const INITIAL_GATE: Gate = {
   plan: null,
   currentPeriodEnd: null,
   cancelAtPeriodEnd: false,
+  trialEnd: null,
 };
 
-const PAYMENT_ISSUE = new Set(["past_due", "unpaid", "incomplete"]);
+const PAYMENT_ISSUE = new Set(["past_due", "unpaid", "incomplete", "paused"]);
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "";
@@ -45,14 +47,15 @@ export default function AnalystPage() {
   const [busy, setBusy] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [gate, setGate] = useState<Gate>(INITIAL_GATE);
-  const [prices, setPrices] = useState<{ monthly: string; annual: string } | null>(null);
+  const [prices, setPrices] = useState<{ monthly: string; annual: string; trialEligible: boolean; trialDraftLimit: number } | null>(null);
   const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [activating, setActivating] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const refresh = useCallback(async (): Promise<boolean> => {
     try {
-      const d = await fetch("/api/entitlement").then((r) => r.json());
+      const d = await fetch("/api/entitlement", { cache: "no-store" }).then((r) => r.json());
       const next: Gate = {
         loading: false,
         signedIn: !!d.signedIn,
@@ -62,6 +65,7 @@ export default function AnalystPage() {
         plan: d.plan ?? null,
         currentPeriodEnd: d.currentPeriodEnd ?? null,
         cancelAtPeriodEnd: !!d.cancelAtPeriodEnd,
+        trialEnd: d.trialEnd ?? null,
       };
       setGate(next);
       return next.active;
@@ -80,9 +84,14 @@ export default function AnalystPage() {
   // Signed in but not subscribed → load the user's A/B-assigned prices.
   useEffect(() => {
     if (gate.loading || !gate.signedIn || gate.active || paymentIssue || prices) return;
-    fetch("/api/pricing")
+    fetch("/api/pricing", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d && setPrices({ monthly: d.monthly.label, annual: d.annual.label }))
+      .then((d) => d && setPrices({
+        monthly: d.monthly.label,
+        annual: d.annual.label,
+        trialEligible: !!d.trialEligible,
+        trialDraftLimit: Number(d.trialDraftLimit),
+      }))
       .catch(() => undefined);
   }, [gate.loading, gate.signedIn, gate.active, paymentIssue, prices]);
 
@@ -138,6 +147,7 @@ export default function AnalystPage() {
 
   async function redirectVia(endpoint: string, body?: unknown) {
     setCheckoutBusy(true);
+    setCheckoutError(null);
     try {
       const res = await fetch(endpoint, {
         method: "POST",
@@ -145,9 +155,10 @@ export default function AnalystPage() {
         body: body ? JSON.stringify(body) : undefined,
       });
       const data = await res.json();
-      if (data.url) window.location.href = data.url;
-      else setCheckoutBusy(false);
-    } catch {
+      if (!res.ok || !data.url) throw new Error(data.error ?? "Billing is temporarily unavailable.");
+      window.location.href = data.url;
+    } catch (error) {
+      setCheckoutError(error instanceof Error ? error.message : "Billing is temporarily unavailable.");
       setCheckoutBusy(false);
     }
   }
@@ -178,7 +189,11 @@ export default function AnalystPage() {
           <span>{planLabel}</span>
           {gate.currentPeriodEnd && (
             <span className={gate.cancelAtPeriodEnd ? "text-[#8a2f2f]" : ""}>
-              {gate.cancelAtPeriodEnd ? `cancels ${fmtDate(gate.currentPeriodEnd)}` : `renews ${fmtDate(gate.currentPeriodEnd)}`}
+              {gate.status === "trialing"
+                ? `trial ends ${fmtDate(gate.trialEnd ?? gate.currentPeriodEnd)}`
+                : gate.cancelAtPeriodEnd
+                  ? `cancels ${fmtDate(gate.currentPeriodEnd)}`
+                  : `renews ${fmtDate(gate.currentPeriodEnd)}`}
             </span>
           )}
           <div className="ml-auto flex items-center gap-3">
@@ -225,44 +240,65 @@ export default function AnalystPage() {
                 >
                   {checkoutBusy ? "Opening…" : "Update payment method"}
                 </button>
-                <p className="font-mono text-[10px] text-[#6b675c] mt-3">
+                <div className="font-mono text-[10px] text-[#6b675c] mt-3">
                   Signed in as {gate.email} ·{" "}
-                  <a href="/auth/signout" className="underline hover:text-[#8a6100]">sign out</a>
-                </p>
+                  <form action="/auth/signout" method="post" className="inline">
+                    <button type="submit" className="underline hover:text-[#8a6100]">sign out</button>
+                  </form>
+                </div>
               </>
             ) : (
               <>
                 <p className="text-sm text-black/70 mt-2 leading-relaxed">
-                  The situation map and updates are free. The analyst drafting workspace —
-                  facts-only report drafts over the published theater data — is a subscription.
+                  The current 72-hour situation picture is free. Analyst access adds the 7D,
+                  30D, and full issue archive plus facts-only drafting over published data.
                 </p>
                 {gate.signedIn ? (
                   <div className="mt-5 flex flex-col gap-2">
                     <button
                       onClick={() => subscribe("monthly")}
-                      disabled={checkoutBusy}
+                      disabled={checkoutBusy || !prices}
                       className="bg-[#171712] text-white text-sm font-semibold py-2.5 hover:bg-[#0b0b3b] disabled:opacity-50"
                     >
-                      {checkoutBusy ? "Redirecting…" : `Subscribe — ${monthlyLabel}`}
+                      {checkoutBusy
+                        ? "Redirecting…"
+                        : !prices
+                          ? "Loading price…"
+                          : prices.trialEligible
+                            ? `Start 7-day free trial · ${monthlyLabel} after`
+                            : `Subscribe — ${monthlyLabel}`}
                     </button>
                     <button
                       onClick={() => subscribe("annual")}
-                      disabled={checkoutBusy}
+                      disabled={checkoutBusy || !prices}
                       className="border border-[#171712] text-[#171712] text-sm font-semibold py-2.5 hover:bg-[#eae4d2] disabled:opacity-50"
                     >
-                      Annual — {annualLabel} (2 months free)
+                      {!prices
+                        ? "Loading annual price…"
+                        : prices.trialEligible
+                          ? `7 days free · ${annualLabel} after`
+                          : `Annual — ${annualLabel}`}
                     </button>
-                    <p className="font-mono text-[10px] text-[#6b675c] mt-2">
+                    {prices?.trialEligible && (
+                      <p className="text-[11px] leading-relaxed text-[#6b675c]">
+                        Includes {prices.trialDraftLimit} trial drafts. Card required. Cancel before day seven to avoid a charge;
+                        otherwise the selected plan begins automatically.
+                      </p>
+                    )}
+                    {checkoutError && <p className="font-mono text-[10px] text-[#8a2f2f]">{checkoutError}</p>}
+                    <div className="font-mono text-[10px] text-[#6b675c] mt-2">
                       Signed in as {gate.email} ·{" "}
-                      <a href="/auth/signout" className="underline hover:text-[#8a6100]">sign out</a>
-                    </p>
+                      <form action="/auth/signout" method="post" className="inline">
+                        <button type="submit" className="underline hover:text-[#8a6100]">sign out</button>
+                      </form>
+                    </div>
                   </div>
                 ) : (
                   <a
                     href="/signin?next=/analyst"
                     className="mt-5 inline-block bg-[#171712] text-white text-sm font-semibold px-6 py-2.5 hover:bg-[#0b0b3b]"
                   >
-                    Sign in to subscribe
+                    Sign in to start free trial
                   </a>
                 )}
               </>

@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { Affiliation, Aor, EventCategory } from "@intel-os/core";
 import { AORS, BLOCS, IDENTITY_COLOR_LIGHT } from "@intel-os/core";
 import type { IssueRow } from "@/lib/db";
-import { applyView, decodeView, encodeView, type ViewState } from "@/lib/urlState";
+import { applyView, decodeView, encodeView, enforceAccessWindow, type ViewState } from "@/lib/urlState";
 import TheaterMap, { type NumberedEvent } from "./TheaterMap";
 import EventCallout from "./EventDetail";
 
@@ -35,28 +35,40 @@ export function zulu(iso: string): string {
     .toUpperCase()} ${String(d.getUTCFullYear()).slice(2)}`;
 }
 
-export default function TheaterView({ issue }: { issue: IssueRow }) {
+export default function TheaterView({
+  issue,
+  hasArchiveAccess,
+  signedIn,
+  reportHref,
+}: {
+  issue: IssueRow;
+  hasArchiveAccess: boolean;
+  signedIn: boolean;
+  reportHref?: string;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [view, setView] = useState<ViewState>(() => decodeView(new URLSearchParams(searchParams.toString())));
+  const [view, setView] = useState<ViewState>(() =>
+    enforceAccessWindow(decodeView(new URLSearchParams(searchParams.toString())), hasArchiveAccess),
+  );
   const viewRef = useRef(view);
   viewRef.current = view;
 
   // UX-2: filter/date state round-trips through the URL
   const updateView = useCallback(
     (patch: Partial<ViewState>) => {
-      const next = { ...viewRef.current, ...patch };
+      const next = enforceAccessWindow({ ...viewRef.current, ...patch }, hasArchiveAccess);
       setView(next);
       const qs = encodeView(next).toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     },
-    [pathname, router],
+    [hasArchiveAccess, pathname, router],
   );
 
   useEffect(() => {
-    setView(decodeView(new URLSearchParams(searchParams.toString())));
-  }, [searchParams]);
+    setView(enforceAccessWindow(decodeView(new URLSearchParams(searchParams.toString())), hasArchiveAccess));
+  }, [hasArchiveAccess, searchParams]);
 
   // Chronological serials over the whole issue snapshot (oldest = 1) — stable
   // regardless of active filters; proof-build numbering convention.
@@ -126,6 +138,7 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
     view.categories.length > 0 || view.usOnly || view.confidenceFloor !== "low";
 
   const affColor = (a: Affiliation) => AFF_META.find((m) => m.key === a)?.hex ?? "#171712";
+  const archiveHref = signedIn ? "/analyst" : `/signin?next=${encodeURIComponent(pathname)}`;
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
@@ -163,7 +176,7 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
           INFO CUT-OFF {zulu(issue.info_cutoff)}
         </span>
         <a
-          href={`/t/${issue.aor.toLowerCase()}/report${typeof window !== "undefined" && window.location.search ? window.location.search : ""}`}
+          href={`${reportHref ?? `/t/${issue.aor.toLowerCase()}/report`}${typeof window !== "undefined" && window.location.search ? window.location.search : ""}`}
           className="font-mono text-[11px] px-3 py-1.5 bg-[#171712] text-[#f5f2ea] hover:bg-[#3a382e]"
         >
           GENERATE REPORT
@@ -172,19 +185,34 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
 
       {/* One thin control bar: time window · filter menu · count */}
       <div className="border-b border-[#c9c2ac] px-5 py-1.5 flex items-center gap-2 bg-[#efeadb] text-[11px] font-mono shrink-0">
-        {WINDOW_PRESETS.map((w) => (
-          <button
-            key={w.label}
-            onClick={() => updateView({ windowHours: w.hours })}
-            className={`px-2.5 py-1 border ${
-              view.windowHours === w.hours
-                ? "border-[#171712] bg-[#171712] text-[#f5f2ea]"
-                : "border-[#c9c2ac] text-[#6b675c] hover:border-[#6b675c]"
-            }`}
-          >
-            {w.label}
-          </button>
-        ))}
+        {WINDOW_PRESETS.map((w) => {
+          const locked = !hasArchiveAccess && (w.hours == null || w.hours > 72);
+          if (locked) {
+            return (
+              <a
+                key={w.label}
+                href={archiveHref}
+                title={`${w.label} history requires Analyst access`}
+                className="px-2.5 py-1 border border-[#c9c2ac] text-[#918c7d] hover:border-[#8a6100] hover:text-[#8a6100]"
+              >
+                {w.label} · LOCKED
+              </a>
+            );
+          }
+          return (
+            <button
+              key={w.label}
+              onClick={() => updateView({ windowHours: w.hours })}
+              className={`px-2.5 py-1 border ${
+                view.windowHours === w.hours
+                  ? "border-[#171712] bg-[#171712] text-[#f5f2ea]"
+                  : "border-[#c9c2ac] text-[#6b675c] hover:border-[#6b675c]"
+              }`}
+            >
+              {w.label}
+            </button>
+          );
+        })}
         <details className="relative">
           <summary
             className={`list-none cursor-pointer px-2.5 py-1 border select-none ${
@@ -225,7 +253,10 @@ export default function TheaterView({ issue }: { issue: IssueRow }) {
             </label>
           </div>
         </details>
-        <span className="ml-auto text-[#6b675c]">
+        <span className="ml-auto text-[#8a6100]">
+          {hasArchiveAccess ? "ANALYST ARCHIVE" : "PUBLIC WINDOW · 72H"}
+        </span>
+        <span className="text-[#6b675c]">
           {filtered.length} events · {plottable.length} plotted
           {unplotted.length > 0 && ` · ${unplotted.length} unplotted`}
         </span>
