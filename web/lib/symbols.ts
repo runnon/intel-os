@@ -60,7 +60,7 @@ export function installationSymbolFor(operator: BaseOperator): {
   const cached = cache.get(sidc);
   if (cached) return { sidc, ...cached };
   const symbol = new ms.Symbol(sidc, {
-    size: 16, // smaller than events (22) so incidents stay dominant
+    size: 12, // noticeably smaller than events (22) so incidents stay dominant
     outlineWidth: 2,
     outlineColor: 'rgba(10,14,18,0.9)',
     colorMode: 'Light',
