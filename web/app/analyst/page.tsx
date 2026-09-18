@@ -166,6 +166,29 @@ export default function AnalystPage() {
   const subscribe = (plan: "monthly" | "annual") => redirectVia("/api/stripe/checkout", { plan });
   const manageBilling = () => redirectVia("/api/stripe/portal");
 
+  // Free-beta: grant access for free (no charge) and unlock in place. Records which
+  // price the user chose to "subscribe" at, for the willingness-to-pay experiment.
+  async function claimFree(plan: "monthly" | "annual") {
+    setCheckoutBusy(true);
+    setCheckoutError(null);
+    try {
+      const res = await fetch("/api/access/claim", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ plan }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Could not grant access.");
+      }
+      await refresh();
+    } catch (error) {
+      setCheckoutError(error instanceof Error ? error.message : "Could not grant access.");
+    } finally {
+      setCheckoutBusy(false);
+    }
+  }
+
   const planLabel = gate.plan ? `${gate.plan[0].toUpperCase()}${gate.plan.slice(1)}` : "Analyst";
   const monthlyLabel = prices?.monthly ?? "$20 / month";
   const annualLabel = prices?.annual ?? "$190 / year";
@@ -256,35 +279,22 @@ export default function AnalystPage() {
                 {gate.signedIn ? (
                   <div className="mt-5 flex flex-col gap-2">
                     <button
-                      onClick={() => subscribe("monthly")}
+                      onClick={() => claimFree("monthly")}
                       disabled={checkoutBusy || !prices}
                       className="bg-[#171712] text-white text-sm font-semibold py-2.5 hover:bg-[#0b0b3b] disabled:opacity-50"
                     >
-                      {checkoutBusy
-                        ? "Redirecting…"
-                        : !prices
-                          ? "Loading price…"
-                          : prices.trialEligible
-                            ? `Start 7-day free trial · ${monthlyLabel} after`
-                            : `Subscribe — ${monthlyLabel}`}
+                      {checkoutBusy ? "Setting up…" : !prices ? "Loading price…" : `Get Analyst — ${monthlyLabel}`}
                     </button>
                     <button
-                      onClick={() => subscribe("annual")}
+                      onClick={() => claimFree("annual")}
                       disabled={checkoutBusy || !prices}
                       className="border border-[#171712] text-[#171712] text-sm font-semibold py-2.5 hover:bg-[#eae4d2] disabled:opacity-50"
                     >
-                      {!prices
-                        ? "Loading annual price…"
-                        : prices.trialEligible
-                          ? `7 days free · ${annualLabel} after`
-                          : `Annual — ${annualLabel}`}
+                      {!prices ? "Loading annual price…" : `Annual — ${annualLabel}`}
                     </button>
-                    {prices?.trialEligible && (
-                      <p className="text-[11px] leading-relaxed text-[#6b675c]">
-                        Includes {prices.trialDraftLimit} trial drafts. Card required. Cancel before day seven to avoid a charge;
-                        otherwise the selected plan begins automatically.
-                      </p>
-                    )}
+                    <p className="text-[11px] leading-relaxed text-[#1f4a2e]">
+                      Free while we&apos;re in beta — no card, no charge.
+                    </p>
                     {checkoutError && <p className="font-mono text-[10px] text-[#8a2f2f]">{checkoutError}</p>}
                     <div className="font-mono text-[10px] text-[#6b675c] mt-2">
                       Signed in as {gate.email} ·{" "}

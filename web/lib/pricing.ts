@@ -28,8 +28,13 @@ function rawVariant(userId: string): PriceVariant {
   return (digest[0] & 1) === 0 ? "a" : "b";
 }
 
-/** True only when variant B's prices are configured — i.e. the experiment is running. */
+/**
+ * True when the price experiment is running. Either the variant-B Stripe prices are
+ * configured (real charging), or PRICING_EXPERIMENT=on forces it — used in free-beta mode,
+ * where we still A/B the displayed price but don't charge, so no Stripe price ids exist.
+ */
 export function experimentLive(): boolean {
+  if (process.env.PRICING_EXPERIMENT === "on") return true;
   return Boolean(process.env.STRIPE_PRICE_MONTHLY_B && process.env.STRIPE_PRICE_ANNUAL_B);
 }
 

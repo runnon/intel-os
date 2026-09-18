@@ -354,3 +354,27 @@ Hardened the Analyst subscription into something operable:
   creation times prevent stale deliveries from rolling entitlement state backward.
 - **Model-cost boundary:** drafting is limited atomically per user (default 20 total during
   trial, then 5/minute and 200/UTC month; server-configurable) before a Bedrock request is made.
+
+## 2026-09-18 — Free-beta: paywall without charging
+
+Pivoted the Analyst tier to **free-beta**: the paywall still shows the (A/B) price and a
+"subscribe" button, but clicking grants access for **free** — no Stripe, no card, no charge.
+Honest by design: the paywall says "Free while we're in beta — no card, no charge." This is
+a fake-door price test, not deception — we never imply a payment was taken.
+
+Why: the shared Stripe account ("Runnon, Inc.") turned out to be locked behind a dead-domain
+owner email and a two-account identity tangle; rather than block the product on that, we
+give access free now and keep the willingness-to-pay signal.
+
+- **Grant path:** `claim_free_access(p_plan)` (migration 20260918000001) — a self-service,
+  auth-gated SECURITY DEFINER function that grants the caller an active entitlement with a
+  far-future period and `price_id = 'free_beta'`. No admin secret needed (users can only
+  grant themselves the free thing).
+- **Endpoint:** `/api/access/claim` grants free access and fires the `subscribed` event
+  `{ free: true, variant, plan }`, so the PostHog `pricing_viewed → subscribed` funnel keeps
+  measuring which price ($10 vs $20) converts better.
+- **Experiment decoupled from Stripe:** `PRICING_EXPERIMENT=on` runs the A/B split without
+  any Stripe price ids configured.
+- **Reversible:** the Stripe checkout/trial/webhook code stays intact but dormant. To charge
+  for real again, point the paywall buttons from `claimFree` back to `subscribe` and finish
+  the Stripe env setup. See docs/FREE_BETA.md.
