@@ -15,3 +15,7 @@ Theater_Picture_Product_Spec_v0.1.pdf
 /*.pdf
 # Internal market/compliance research — keep out of the public repo
 research/
+
+# Supabase CLI local state / cache
+supabase/.temp/
+supabase/.branches/
