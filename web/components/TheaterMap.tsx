@@ -418,6 +418,33 @@ export default function TheaterMap({ events, selectedId, onSelect, forExport = f
       map.on("mouseenter", "event-symbols", () => (map.getCanvas().style.cursor = "pointer"));
       map.on("mouseleave", "event-symbols", () => (map.getCanvas().style.cursor = ""));
 
+      // Click a base to see its name + operator + country.
+      const OPERATOR_LABEL: Record<string, string> = {
+        us: "US / coalition base",
+        host: "Host-nation base",
+        adversary: "Adversary base",
+        unknown: "Installation",
+      };
+      const installationPopup = new maplibregl.Popup({
+        closeButton: true,
+        closeOnClick: true,
+        offset: 8,
+        className: "infrastructure-popup",
+      });
+      map.on("click", "installation-symbols", (ev: maplibregl.MapLayerMouseEvent) => {
+        const p = ev.features?.[0]?.properties;
+        if (!p) return;
+        const card = document.createElement("div");
+        const name = document.createElement("strong");
+        const detail = document.createElement("span");
+        name.textContent = String(p.name);
+        detail.textContent = `${OPERATOR_LABEL[String(p.operator)] ?? "Installation"}${p.country ? ` · ${String(p.country)}` : ""}`;
+        card.append(name, detail);
+        installationPopup.setLngLat(ev.lngLat).setDOMContent(card).addTo(map);
+      });
+      map.on("mouseenter", "installation-symbols", () => (map.getCanvas().style.cursor = "pointer"));
+      map.on("mouseleave", "installation-symbols", () => (map.getCanvas().style.cursor = ""));
+
       const routePopup = new maplibregl.Popup({
         closeButton: false,
         closeOnClick: false,
@@ -632,7 +659,7 @@ function syncInstallations(map: maplibregl.Map, refEvents: NumberedEvent[]): voi
       features: list.map((i) => ({
         type: "Feature",
         geometry: { type: "Point", coordinates: [i.lon, i.lat] },
-        properties: { sidc: installationSymbolFor(i.operator).sidc, name: i.name, operator: i.operator },
+        properties: { sidc: installationSymbolFor(i.operator).sidc, name: i.name, operator: i.operator, country: i.country },
       })),
     });
   });
