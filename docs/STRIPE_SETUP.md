@@ -28,11 +28,14 @@ insert into entitlement_admin (id, grant_secret) values (1, '<random-secret>')
   on conflict (id) do update set grant_secret = excluded.grant_secret;
 ```
 
-### 3. Supabase — enable email auth
-Auth → Providers → Email: enable, with "magic link" / OTP. Under Auth → URL
-Configuration set Site URL to the production origin and add redirect URLs:
+### 3. Supabase — enable email/password auth
+Auth → Providers → Email: enable email/password sign-up and require email confirmation.
+Set a minimum password length of at least eight characters, enable leaked-password
+protection when available, and configure production SMTP rather than relying on the
+rate-limited default sender. Under Auth → URL Configuration set Site URL to the
+production origin and add redirect URLs:
 `https://intel-os-self.vercel.app/auth/callback` (and `http://localhost:3000/auth/callback`
-for dev).
+for dev). Verify sign-up confirmation and password-reset delivery before launch.
 
 ### 4. Stripe — restricted key
 Use a temporary restricted setup key with write access to **Products** and **Prices** for

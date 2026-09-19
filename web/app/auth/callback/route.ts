@@ -5,7 +5,8 @@ import { safeInternalPath } from "@/lib/safe-redirect";
 
 export const runtime = "nodejs";
 
-// Magic-link landing: exchanges the PKCE code for a session, then redirects on.
+// Email-confirmation and password-recovery landing: exchange the PKCE code for
+// a cookie-backed session, then continue only to a validated internal path.
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");

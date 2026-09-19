@@ -1,6 +1,6 @@
 import { createBrowserClient } from "@supabase/ssr";
 
-// Browser-side Supabase client with cookie-backed sessions (magic-link auth).
+// Browser-side Supabase client with cookie-backed email/password sessions.
 // Uses the public anon key + URL (public by design; RLS enforces access).
 export function createSupabaseBrowserClient() {
   return createBrowserClient(

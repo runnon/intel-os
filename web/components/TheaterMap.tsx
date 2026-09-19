@@ -69,6 +69,9 @@ interface Props {
   // infrastructure to draw — a pipeline shows if any event mentions it, even
   // when that event itself has no plotted point. Defaults to `events`.
   referenceEvents?: NumberedEvent[];
+  // "All theaters" mode: events span every AOR, so start on a world view and skip the
+  // per-AOR overlays (blocs/installations/infra) that key on a single command.
+  allTheaters?: boolean;
 }
 
 /**
@@ -116,7 +119,7 @@ function toGeoJSON(events: NumberedEvent[]): GeoJSON.FeatureCollection {
   };
 }
 
-export default function TheaterMap({ events, selectedId, onSelect, forExport = false, referenceEvents }: Props) {
+export default function TheaterMap({ events, selectedId, onSelect, forExport = false, referenceEvents, allTheaters = false }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const readyRef = useRef(false);
@@ -124,6 +127,8 @@ export default function TheaterMap({ events, selectedId, onSelect, forExport = f
   eventsRef.current = events;
   const refEventsRef = useRef(referenceEvents ?? events);
   refEventsRef.current = referenceEvents ?? events;
+  const allTheatersRef = useRef(allTheaters);
+  allTheatersRef.current = allTheaters;
   // Current on-screen (decluttered) position of each event, id -> [lng,lat];
   // kept in sync so the selection ring lands on the displaced icon.
   const layoutRef = useRef<Map<string, [number, number]>>(new Map());
@@ -135,8 +140,8 @@ export default function TheaterMap({ events, selectedId, onSelect, forExport = f
     const map = new maplibregl.Map({
       container: container.current,
       style: STYLE_URL,
-      center: [47, 26],
-      zoom: 4,
+      center: allTheaters ? [10, 25] : [47, 26],
+      zoom: allTheaters ? 1.3 : 4,
       // Without this the map's WebGL buffer is cleared after each frame, so
       // window.print() / html-to-image captures a blank canvas (UX-5 export).
       // maplibre-gl v5 nests it under canvasContextAttributes.
@@ -477,10 +482,14 @@ export default function TheaterMap({ events, selectedId, onSelect, forExport = f
       }
 
       readyRef.current = true;
-      const activeLines = syncInfraLines(map, refEventsRef.current);
-      syncInfraPoints(map, refEventsRef.current);
-      syncBlocs(map, refEventsRef.current);
-      syncInstallations(map, refEventsRef.current);
+      // Per-AOR overlays (blocs/installations/infra) key on a single command; skip them in
+      // the combined "All theaters" view so one theater's shading doesn't paint the globe.
+      const activeLines = allTheatersRef.current ? [] : syncInfraLines(map, refEventsRef.current);
+      if (!allTheatersRef.current) {
+        syncInfraPoints(map, refEventsRef.current);
+        syncBlocs(map, refEventsRef.current);
+        syncInstallations(map, refEventsRef.current);
+      }
       fitToContent(map, eventsRef.current, activeLines, false, forExport);
       // Register the symbol images, then lay out (declutter) at the fitted view.
       void ensureImages(map, eventsRef.current).then(() =>
@@ -529,10 +538,12 @@ export default function TheaterMap({ events, selectedId, onSelect, forExport = f
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !readyRef.current) return;
-    syncInfraLines(map, referenceEvents ?? events);
-    syncInfraPoints(map, referenceEvents ?? events);
-    syncBlocs(map, referenceEvents ?? events);
-    syncInstallations(map, referenceEvents ?? events);
+    if (!allTheatersRef.current) {
+      syncInfraLines(map, referenceEvents ?? events);
+      syncInfraPoints(map, referenceEvents ?? events);
+      syncBlocs(map, referenceEvents ?? events);
+      syncInstallations(map, referenceEvents ?? events);
+    }
     if (forExport) fitToContent(map, events, referencedFor(referenceEvents ?? events), false, true);
     void ensureImages(map, events).then(() =>
       relayout(map, events, layoutRef.current, !forExport, selectedIdRef.current),

@@ -40,11 +40,13 @@ export default function TheaterView({
   hasArchiveAccess,
   signedIn,
   reportHref,
+  allTheaters = false,
 }: {
   issue: IssueRow;
   hasArchiveAccess: boolean;
   signedIn: boolean;
   reportHref?: string;
+  allTheaters?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -147,23 +149,39 @@ export default function TheaterView({
         <a href="/" className="font-mono text-[11px] tracking-widest text-[#6b675c] hover:text-[#a02c2c]">
           ◂ THEATER PICTURE
         </a>
-        <span className="headline text-2xl">{issue.aor}</span>
-        <a
-          href={`/t/${issue.aor.toLowerCase()}/history`}
-          className="font-mono text-[11px] text-[#6b675c] hover:text-[#171712]"
-          title="Issue archive"
-        >
-          {issue.serial} · situation update
-        </a>
+        <span className="headline text-2xl">{allTheaters ? "ALL THEATERS" : issue.aor}</span>
+        {allTheaters ? (
+          <span className="font-mono text-[11px] text-[#6b675c]">all commands · 72-hour picture</span>
+        ) : (
+          <a
+            href={`/t/${issue.aor.toLowerCase()}/history`}
+            className="font-mono text-[11px] text-[#6b675c] hover:text-[#171712]"
+            title="Issue archive"
+          >
+            {issue.serial} · situation update
+          </a>
+        )}
         <nav className="flex items-center gap-1 font-mono text-[10px]" aria-label="Switch command">
+          <a
+            href="/t/all"
+            title="All theaters"
+            aria-current={allTheaters ? "page" : undefined}
+            className={`px-1.5 py-0.5 border ${
+              allTheaters
+                ? "border-[#171712] bg-[#171712] text-[#f5f2ea]"
+                : "border-[#c9c2ac] text-[#6b675c] hover:border-[#6b675c] hover:text-[#171712]"
+            }`}
+          >
+            ALL
+          </a>
           {AORS.map((a) => (
             <a
               key={a}
               href={`/t/${a.toLowerCase()}`}
               title={`Switch to ${a}`}
-              aria-current={a === issue.aor ? "page" : undefined}
+              aria-current={!allTheaters && a === issue.aor ? "page" : undefined}
               className={`px-1.5 py-0.5 border ${
-                a === issue.aor
+                !allTheaters && a === issue.aor
                   ? "border-[#171712] bg-[#171712] text-[#f5f2ea]"
                   : "border-[#c9c2ac] text-[#6b675c] hover:border-[#6b675c] hover:text-[#171712]"
               }`}
@@ -175,12 +193,14 @@ export default function TheaterView({
         <span className="font-mono text-[11px] text-[#8a6100] ml-auto">
           INFO CUT-OFF {zulu(issue.info_cutoff)}
         </span>
-        <a
-          href={`${reportHref ?? `/t/${issue.aor.toLowerCase()}/report`}${typeof window !== "undefined" && window.location.search ? window.location.search : ""}`}
-          className="font-mono text-[11px] px-3 py-1.5 bg-[#171712] text-[#f5f2ea] hover:bg-[#3a382e]"
-        >
-          GENERATE REPORT
-        </a>
+        {!allTheaters && (
+          <a
+            href={`${reportHref ?? `/t/${issue.aor.toLowerCase()}/report`}${typeof window !== "undefined" && window.location.search ? window.location.search : ""}`}
+            className="font-mono text-[11px] px-3 py-1.5 bg-[#171712] text-[#f5f2ea] hover:bg-[#3a382e]"
+          >
+            GENERATE REPORT
+          </a>
+        )}
       </header>
 
       {/* One thin control bar: time window · filter menu · count */}
@@ -271,6 +291,7 @@ export default function TheaterView({
             referenceEvents={filtered}
             selectedId={view.selectedEvent}
             onSelect={(id) => updateView({ selectedEvent: id })}
+            allTheaters={allTheaters}
           />
 
           {/* LEGEND doubles as the affiliation filter (proof-build block) */}

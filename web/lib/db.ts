@@ -89,6 +89,26 @@ export async function latestIssues(): Promise<IssueRow[]> {
   return ((data ?? []) as IssueRow[]).map(summarizePublicIssue);
 }
 
+/**
+ * Combined "All theaters" view: every AOR's latest public 72-hour events merged onto one
+ * global map. Uses the public per-AOR projections (the map fits to the combined extent).
+ */
+export async function combinedLatestIssue(): Promise<IssueRow | null> {
+  const issues = await latestIssues();
+  if (!issues.length) return null;
+  const base = issues.reduce((a, b) => (b.info_cutoff > a.info_cutoff ? b : a));
+  const snapshot = issues.flatMap((i) => i.snapshot ?? []);
+  const infoCutoff = issues.reduce((m, i) => (i.info_cutoff > m ? i.info_cutoff : m), issues[0].info_cutoff);
+  const windowStart = issues.reduce((m, i) => (i.window_start < m ? i.window_start : m), issues[0].window_start);
+  return summarizePublicIssue({
+    ...base,
+    serial: "ALL-THEATERS",
+    snapshot,
+    info_cutoff: infoCutoff,
+    window_start: windowStart,
+  });
+}
+
 /** Current issue: full canonical snapshot for Analyst, 72-hour projection for Public. */
 export async function latestIssueFor(aor: Aor, hasArchiveAccess = false): Promise<IssueRow | null> {
   const supabase = await createSupabaseServerClient();

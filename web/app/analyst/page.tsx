@@ -20,6 +20,7 @@ type Gate = {
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
   trialEnd: string | null;
+  accessKind: "none" | "paid" | "free_beta";
 };
 
 const INITIAL_GATE: Gate = {
@@ -32,6 +33,7 @@ const INITIAL_GATE: Gate = {
   currentPeriodEnd: null,
   cancelAtPeriodEnd: false,
   trialEnd: null,
+  accessKind: "none",
 };
 
 const PAYMENT_ISSUE = new Set(["past_due", "unpaid", "incomplete", "paused"]);
@@ -51,6 +53,7 @@ export default function AnalystPage() {
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [activating, setActivating] = useState(false);
+  const [betaReveal, setBetaReveal] = useState<{ plan: "monthly" | "annual"; label: string } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const refresh = useCallback(async (): Promise<boolean> => {
@@ -66,6 +69,7 @@ export default function AnalystPage() {
         currentPeriodEnd: d.currentPeriodEnd ?? null,
         cancelAtPeriodEnd: !!d.cancelAtPeriodEnd,
         trialEnd: d.trialEnd ?? null,
+        accessKind: d.accessKind === "free_beta" ? "free_beta" : d.accessKind === "paid" ? "paid" : "none",
       };
       setGate(next);
       return next.active;
@@ -163,11 +167,10 @@ export default function AnalystPage() {
     }
   }
 
-  const subscribe = (plan: "monthly" | "annual") => redirectVia("/api/stripe/checkout", { plan });
   const manageBilling = () => redirectVia("/api/stripe/portal");
 
-  // Free-beta: grant access for free (no charge) and unlock in place. Records which
-  // price the user chose to "subscribe" at, for the willingness-to-pay experiment.
+  // Free-beta: grant access only after a verified user chooses a priced plan. The
+  // click is recorded as price intent, then the no-charge beta access is revealed.
   async function claimFree(plan: "monthly" | "annual") {
     setCheckoutBusy(true);
     setCheckoutError(null);
@@ -177,11 +180,13 @@ export default function AnalystPage() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ plan }),
       });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
         throw new Error(data.error ?? "Could not grant access.");
       }
-      await refresh();
+      const active = await refresh();
+      if (!active) throw new Error("Access was granted but could not be verified. Refresh and try again.");
+      setBetaReveal({ plan, label: plan === "monthly" ? monthlyLabel : annualLabel });
     } catch (error) {
       setCheckoutError(error instanceof Error ? error.message : "Could not grant access.");
     } finally {
@@ -210,7 +215,9 @@ export default function AnalystPage() {
           <span>{gate.email}</span>
           <span className="text-[#c9c2ac]">·</span>
           <span>{planLabel}</span>
-          {gate.currentPeriodEnd && (
+          {gate.accessKind === "free_beta" ? (
+            <span className="text-[#1f4a2e]">FREE BETA ACCESS · NO CARD ON FILE</span>
+          ) : gate.currentPeriodEnd && (
             <span className={gate.cancelAtPeriodEnd ? "text-[#8a2f2f]" : ""}>
               {gate.status === "trialing"
                 ? `trial ends ${fmtDate(gate.trialEnd ?? gate.currentPeriodEnd)}`
@@ -220,13 +227,15 @@ export default function AnalystPage() {
             </span>
           )}
           <div className="ml-auto flex items-center gap-3">
-            <button
-              onClick={manageBilling}
-              disabled={checkoutBusy}
-              className="underline hover:text-[#8a6100] disabled:opacity-50"
-            >
-              Manage billing
-            </button>
+            {gate.accessKind !== "free_beta" && (
+              <button
+                onClick={manageBilling}
+                disabled={checkoutBusy}
+                className="underline hover:text-[#8a6100] disabled:opacity-50"
+              >
+                Manage billing
+              </button>
+            )}
             <form action="/auth/signout" method="post">
               <button type="submit" className="underline hover:text-[#8a6100]">Sign out</button>
             </form>
@@ -248,7 +257,7 @@ export default function AnalystPage() {
       ) : !gate.active ? (
         <div className="flex-1 min-h-0 overflow-y-auto flex items-center justify-center px-4">
           <div className="w-full max-w-md border border-[#c9c2ac] bg-[#f5f2ea] p-6 text-center">
-            <span className="tag">Analyst tier</span>
+            <span className="tag">Step 2 of 2 · Analyst tier</span>
             <h2 className="headline text-2xl mt-3">Drafting workspace</h2>
             {paymentIssue ? (
               <>
@@ -283,17 +292,17 @@ export default function AnalystPage() {
                       disabled={checkoutBusy || !prices}
                       className="bg-[#171712] text-white text-sm font-semibold py-2.5 hover:bg-[#0b0b3b] disabled:opacity-50"
                     >
-                      {checkoutBusy ? "Setting up…" : !prices ? "Loading price…" : `Get Analyst — ${monthlyLabel}`}
+                      {checkoutBusy ? "Continuing…" : !prices ? "Loading price…" : `Continue — ${monthlyLabel}`}
                     </button>
                     <button
                       onClick={() => claimFree("annual")}
                       disabled={checkoutBusy || !prices}
                       className="border border-[#171712] text-[#171712] text-sm font-semibold py-2.5 hover:bg-[#eae4d2] disabled:opacity-50"
                     >
-                      {!prices ? "Loading annual price…" : `Annual — ${annualLabel}`}
+                      {!prices ? "Loading annual price…" : `Continue — ${annualLabel}`}
                     </button>
-                    <p className="text-[11px] leading-relaxed text-[#1f4a2e]">
-                      Free while we&apos;re in beta — no card, no charge.
+                    <p className="text-[11px] leading-relaxed text-[#6b675c]">
+                      Select the plan you would use for Analyst access. No payment details are collected on this screen.
                     </p>
                     {checkoutError && <p className="font-mono text-[10px] text-[#8a2f2f]">{checkoutError}</p>}
                     <div className="font-mono text-[10px] text-[#6b675c] mt-2">
@@ -308,7 +317,7 @@ export default function AnalystPage() {
                     href="/signin?next=/analyst"
                     className="mt-5 inline-block bg-[#171712] text-white text-sm font-semibold px-6 py-2.5 hover:bg-[#0b0b3b]"
                   >
-                    Sign in to start free trial
+                    Create account or sign in
                   </a>
                 )}
               </>
@@ -318,6 +327,15 @@ export default function AnalystPage() {
       ) : (
         <div className="flex-1 min-h-0 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
+            {betaReveal && (
+              <div role="status" className="border border-[#1f4a2e] bg-[#edf3e9] px-5 py-4">
+                <p className="headline text-xl text-[#1f4a2e]">Beta access unlocked</p>
+                <p className="mt-2 text-sm leading-relaxed text-[#3d493b]">
+                  You selected {betaReveal.label}. While Theater Picture is in beta, Analyst access is free.
+                  No card was collected and you were not charged. Paid access will require a separate opt-in when beta ends.
+                </p>
+              </div>
+            )}
             {messages.length === 0 && (
               <div className="border border-[#c9c2ac] rounded-md p-5 bg-[#efeadb]">
                 <p className="text-sm text-black/70 leading-relaxed">

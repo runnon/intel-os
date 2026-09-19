@@ -26,12 +26,14 @@ prompts, issue bodies, and source content are not sent.
 |---|---|---|
 | `signed_in` | `/auth/callback` | — |
 | `pricing_viewed` | `/api/pricing` (first exposure only) | `variant`, `monthly_amount`, `annual_amount` |
+| `pricing_intent` | `/api/access/claim` (verified free-beta claim) | `plan`, `variant`, `access_granted` |
 | `checkout_started` | `/api/stripe/checkout` | `plan`, `variant`, `trial` |
 | `subscribed` | Stripe webhook (checkout completed) | `plan`, `variant`, `price_id`, `trial` |
 | `subscription_canceled` | Stripe webhook (sub deleted) | `plan` |
 
 ## Price A/B readout
 
-The `variant` property on `pricing_viewed` and `subscribed` gives the $10-vs-$20 funnel:
-build a funnel `pricing_viewed → subscribed` broken down by `variant`. (This complements
-the Supabase-only readout in docs/STRIPE_SETUP.md; either works.)
+During free beta, use `pricing_viewed → pricing_intent` broken down by `variant`. This is
+a fake-door price-intent measure, not a completed purchase or proven willingness to pay.
+Once charging is live, use `pricing_viewed → checkout_started → subscribed`; that funnel
+measures actual checkout and paid/trial conversion.

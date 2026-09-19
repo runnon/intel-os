@@ -1,36 +1,49 @@
-# Free-beta mode
+# Free-beta price-intent test
 
-The Analyst tier is currently **free**. The paywall still shows a price and a subscribe
-button (so we can measure willingness to pay), but clicking grants access at no charge —
-no Stripe, no card. The UI says so plainly: *"Free while we're in beta — no card, no charge."*
+The Analyst tier is currently free, but access is granted only after a person completes
+email/password onboarding, confirms their email, and chooses a displayed monthly or annual
+plan. After that choice, the product reveals that beta access is free: no card is collected
+and no charge occurs.
 
-## How it works
+The reveal explicitly says that paid access will require a separate opt-in when beta ends.
+The product must never claim that a payment succeeded or imply that it can charge later
+without new consent.
 
-- **Paywall** (`web/app/analyst/page.tsx`): the buttons call `claimFree(plan)`, which POSTs
-  `/api/access/claim` and unlocks in place. Price labels come from the A/B experiment.
-- **Grant** (`/api/access/claim` → `claim_free_access()` RPC, migration
-  `20260918000001_free_beta_access.sql`): grants the signed-in user an active entitlement
-  (far-future period, `price_id = 'free_beta'`).
-- **Experiment**: `PRICING_EXPERIMENT=on` enables the $10-vs-$20 split with no Stripe prices.
-  Each claim fires a PostHog `subscribed` event `{ free: true, variant, plan }`; the
-  `pricing_viewed → subscribed` funnel shows which price converts better.
+## Flow
 
-## Measuring willingness to pay
+1. The visitor creates an account with email and password.
+2. Supabase confirms the email and establishes a session.
+3. `/analyst` shows the assigned A/B prices.
+4. The visitor selects the plan they would use.
+5. `/api/access/claim` verifies the confirmed user, records `pricing_intent`, grants the
+   free-beta entitlement, and returns no payment URL.
+6. The interface reveals that access is free during beta and confirms that no card was
+   collected and no charge was made.
 
-- **PostHog** (project `intel-os`, id 615149): the funnel insight already exists — split by
-  `variant` to compare $10 vs $20 click-through.
-- **Supabase**: `pricing_exposures` (denominator) vs entitlements with `price_id='free_beta'`
-  (who claimed). Variant is recomputable from the user id.
+`claim_free_access()` can grant access only to a confirmed `auth.uid()`; a browser cannot
+claim access for another user. The first plan selection is immutable and returns the only
+countable conversion, preventing repeated clicks or plan switching from inflating the test.
+The row is marked with `price_id = 'free_beta'` so the account bar never presents a false
+renewal date or billing-portal action.
 
-## Switching back to real charging
+Deploy both `20260918000001_free_beta_access.sql` and
+`20260918000002_free_beta_onboarding.sql` before the updated web application. The second
+migration adds the confirmed-email and one-time-choice enforcement expected by the API.
 
-Everything for paid billing still exists, just dormant:
+## Interpreting the experiment
 
-1. Point the paywall buttons from `claimFree` back to `subscribe` (Stripe checkout).
-2. Restore the trial/card copy if wanted.
-3. Complete the Stripe env setup in `docs/STRIPE_SETUP.md` (restricted key, products,
-   webhook, `STRIPE_*` + `ENTITLEMENT_GRANT_SECRET` env vars).
-4. Optionally unset `PRICING_EXPERIMENT` and drive the split off the `_B` price ids instead.
+Use the PostHog funnel `pricing_viewed → pricing_intent`, split by `variant`. This measures
+price-page intent after verified onboarding. It is not equivalent to a completed checkout,
+a card-backed trial, or proven willingness to pay, so do not combine it with the Stripe
+`subscribed` metric.
 
-No data model changes are needed to switch — `claim_free_access` and the Stripe webhook
-write to the same `entitlements` table.
+## Switching to charging
+
+The Stripe checkout, seven-day trial, portal, and webhook implementation remains available:
+
+1. Point the plan buttons to `/api/stripe/checkout` instead of `/api/access/claim`.
+2. Restore the trial and automatic-renewal disclosure before the action.
+3. Complete the restricted Stripe environment and webhook setup in `docs/STRIPE_SETUP.md`.
+4. Leave historical `pricing_intent` events separate from paid `subscribed` events.
+
+No entitlement schema change is required; both paths write the same entitlement model.

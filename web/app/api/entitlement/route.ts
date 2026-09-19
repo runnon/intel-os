@@ -20,6 +20,7 @@ export async function GET() {
       active,
       status: ent?.status ?? "none",
       plan: ent?.plan ?? null,
+      accessKind: ent?.price_id === "free_beta" ? "free_beta" : ent ? "paid" : "none",
       currentPeriodEnd: ent?.current_period_end ?? null,
       cancelAtPeriodEnd: ent?.cancel_at_period_end ?? false,
       trialEnd: ent?.trial_end ?? null,

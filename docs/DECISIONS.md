@@ -307,7 +307,7 @@ trial. The complete trailing 72-hour situation picture stays free. Analyst unloc
 boundary is an objective time window, not a judgement about which events are important.
 
 Decisions:
-- **Auth:** added Supabase Auth (email magic-link) via `@supabase/ssr` — first auth in
+- **Auth:** added Supabase Auth via `@supabase/ssr` — first auth in
   the product. Self-hostable, no third-party CDN (NFR-4/5 safe). Prereq for a paywall,
   since gating requires knowing who is subscribed.
 - **Payments:** existing shared Stripe account `acct_1SSUvpPzSHwImUes` (same account as
@@ -357,24 +357,35 @@ Hardened the Analyst subscription into something operable:
 
 ## 2026-09-18 — Free-beta: paywall without charging
 
-Pivoted the Analyst tier to **free-beta**: the paywall still shows the (A/B) price and a
-"subscribe" button, but clicking grants access for **free** — no Stripe, no card, no charge.
-Honest by design: the paywall says "Free while we're in beta — no card, no charge." This is
-a fake-door price test, not deception — we never imply a payment was taken.
+Pivoted the Analyst tier to **free-beta**: after verified onboarding, the plan screen shows
+the (A/B) price and records the plan selected. It then reveals that access is free during
+beta — no Stripe, no card, no charge. The reveal explicitly says no payment occurred and
+that paid access will require a separate opt-in.
 
 Why: the shared Stripe account ("Runnon, Inc.") turned out to be locked behind a dead-domain
 owner email and a two-account identity tangle; rather than block the product on that, we
-give access free now and keep the willingness-to-pay signal.
+give access free now and measure post-onboarding price intent.
 
 - **Grant path:** `claim_free_access(p_plan)` (migration 20260918000001) — a self-service,
   auth-gated SECURITY DEFINER function that grants the caller an active entitlement with a
-  far-future period and `price_id = 'free_beta'`. No admin secret needed (users can only
-  grant themselves the free thing).
-- **Endpoint:** `/api/access/claim` grants free access and fires the `subscribed` event
-  `{ free: true, variant, plan }`, so the PostHog `pricing_viewed → subscribed` funnel keeps
-  measuring which price ($10 vs $20) converts better.
+  far-future period and `price_id = 'free_beta'`. Migration 20260918000002 additionally
+  requires a confirmed email and preserves the first plan choice so repeat clicks cannot
+  inflate the experiment. No admin secret is needed; users can grant only themselves the
+  free thing.
+- **Endpoint:** `/api/access/claim` requires a confirmed email, grants free access, and
+  fires `pricing_intent { access_granted: 'free_beta', variant, plan }`. This signal is
+  kept separate from Stripe's real `subscribed` conversion.
 - **Experiment decoupled from Stripe:** `PRICING_EXPERIMENT=on` runs the A/B split without
   any Stripe price ids configured.
 - **Reversible:** the Stripe checkout/trial/webhook code stays intact but dormant. To charge
   for real again, point the paywall buttons from `claimFree` back to `subscribe` and finish
   the Stripe env setup. See docs/FREE_BETA.md.
+
+### 2026-09-18 — Email/password onboarding before the free-beta price test
+
+Replaced magic-link-only sign-in with conventional email/password account creation,
+email confirmation, sign-in, and password recovery. Free-beta access is not automatic:
+the confirmed user must reach the Analyst plan screen and choose a displayed plan. This
+makes `pricing_intent` a post-onboarding signal while preserving explicit consent: no card
+is collected, no charge is represented as successful, and future paid access requires a
+new opt-in.

@@ -8,6 +8,7 @@ function entitlement(overrides: Partial<Entitlement> = {}): Entitlement {
   return {
     status: "active",
     plan: "monthly",
+    price_id: "price_test",
     current_period_end: "2099-01-01T00:00:00.000Z",
     cancel_at_period_end: false,
     trial_used: true,

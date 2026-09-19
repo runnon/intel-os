@@ -42,5 +42,5 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   // Only routes that can consume or refresh an authenticated entitlement.
-  matcher: ["/t/:path*", "/i/:path*", "/analyst/:path*", "/signin", "/auth/:path*", "/api/analyst", "/api/entitlement", "/api/pricing", "/api/stripe/:path*"],
+  matcher: ["/t/:path*", "/i/:path*", "/analyst/:path*", "/signin", "/reset-password", "/auth/:path*", "/api/analyst", "/api/access/:path*", "/api/entitlement", "/api/pricing", "/api/stripe/:path*"],
 };

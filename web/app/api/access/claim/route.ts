@@ -5,14 +5,16 @@ import { track } from "@/lib/analytics";
 
 export const runtime = "nodejs";
 
-// Free-beta access: grants the analyst entitlement without charging. The paywall shows the
-// (A/B) price, and this records WHICH price the user chose to "subscribe" at — the
-// willingness-to-pay signal — as a `subscribed` event (free: true) so the existing
-// pricing_viewed → subscribed funnel keeps measuring the experiment.
+// Free-beta access: after verified onboarding, the user chooses a displayed price and
+// receives beta access without a card or charge. This records price intent separately
+// from real Stripe subscription conversion.
 export async function POST(request: Request) {
   const user = await getSessionUser();
   if (!user) {
     return NextResponse.json({ error: "sign in required" }, { status: 401 });
+  }
+  if (!user.email_confirmed_at) {
+    return NextResponse.json({ error: "Confirm your email before choosing Analyst access." }, { status: 403 });
   }
 
   const body = (await request.json().catch(() => ({}))) as { plan?: "monthly" | "annual" };
@@ -20,12 +22,16 @@ export async function POST(request: Request) {
   const variant = variantFor(user.id);
 
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.rpc("claim_free_access", { p_plan: plan });
+  const { data: firstClaim, error } = await supabase.rpc("claim_free_access", { p_plan: plan });
   if (error) {
     console.error("[access] claim-failed", error);
     return NextResponse.json({ error: "Could not grant access. Try again." }, { status: 500 });
   }
 
-  after(() => track(user.id, "subscribed", { plan, variant, free: true }));
-  return NextResponse.json({ ok: true });
+  // This is a price-intent/fake-door signal, not a completed purchase. Keeping
+  // the event name honest prevents beta clicks from inflating paid conversion.
+  if (firstClaim) {
+    after(() => track(user.id, "pricing_intent", { plan, variant, access_granted: "free_beta" }));
+  }
+  return NextResponse.json({ ok: true, access: "free_beta", plan, firstClaim: Boolean(firstClaim) });
 }

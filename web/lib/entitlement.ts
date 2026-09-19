@@ -3,6 +3,7 @@ import { createSupabaseServerClient, hasSupabaseAuthCookie } from "@/lib/supabas
 export type Entitlement = {
   status: string;
   plan: string | null;
+  price_id: string | null;
   current_period_end: string | null;
   cancel_at_period_end: boolean;
   trial_used: boolean;
@@ -26,7 +27,7 @@ export async function getEntitlement(): Promise<Entitlement | null> {
   if (!user) return null;
   const { data } = await supabase
     .from("entitlements")
-    .select("status, plan, current_period_end, cancel_at_period_end, trial_used, trial_end, stripe_customer_id, stripe_subscription_id")
+    .select("status, plan, price_id, current_period_end, cancel_at_period_end, trial_used, trial_end, stripe_customer_id, stripe_subscription_id")
     .eq("user_id", user.id)
     .maybeSingle();
   return (data as Entitlement) ?? null;
@@ -41,7 +42,7 @@ export async function getViewerEntitlement(): Promise<ViewerEntitlement> {
 
   const { data } = await supabase
     .from("entitlements")
-    .select("status, plan, current_period_end, cancel_at_period_end, trial_used, trial_end, stripe_customer_id, stripe_subscription_id")
+    .select("status, plan, price_id, current_period_end, cancel_at_period_end, trial_used, trial_end, stripe_customer_id, stripe_subscription_id")
     .eq("user_id", user.id)
     .maybeSingle();
   const entitlement = (data as Entitlement) ?? null;
