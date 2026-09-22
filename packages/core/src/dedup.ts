@@ -40,13 +40,43 @@ function samePlace(a: TheaterEvent, b: TheaterEvent): boolean {
   return false;
 }
 
-/** Two candidate events describe the same incident if place, time and content agree. */
+/** Same-incident text overlap when place, time and category all agree. */
+export const DUPLICATE_SIMILARITY = 0.4;
+/** Overlap high enough that a differing model-assigned category is noise, not a
+ *  different incident (the extractor labels the same engagement "strike" one cycle
+ *  and "air-defense" the next). */
+export const DUPLICATE_SIMILARITY_ACROSS_CATEGORY = 0.6;
+/** Occurrence-time tolerance. Deliberately NOT widened: a nightly strike series on
+ *  the same base is several real events, and merging them destroys reporting. */
+export const DUPLICATE_HOURS = 36;
+
+function sharesSource(a: TheaterEvent, b: TheaterEvent): boolean {
+  const urls = new Set(a.sources.map((s) => s.url));
+  return b.sources.some((s) => urls.has(s.url));
+}
+
+/**
+ * Two candidate events describe the same incident if place, time and content agree.
+ *
+ * Three ways to qualify, all requiring the same AOR and the same place:
+ *  1. The two cite the SAME SOURCE URL. One article re-fetched on a later 12-hour
+ *     cycle and re-extracted with different wording, a different category, or an
+ *     occurrence time that drifted from event day to publication day is the same
+ *     report, not a second incident — this is how one strike showed up three times
+ *     in a register (CENTCOM, 2026-09-22). A roundup article covering two places
+ *     still yields two events because the place check stays.
+ *  2. Within DUPLICATE_HOURS, same category, text overlap ≥ DUPLICATE_SIMILARITY.
+ *  3. Within DUPLICATE_HOURS, overlap ≥ DUPLICATE_SIMILARITY_ACROSS_CATEGORY even if
+ *     the category differs.
+ */
 export function isDuplicate(a: TheaterEvent, b: TheaterEvent): boolean {
   if (a.aor !== b.aor) return false;
   if (!samePlace(a, b)) return false;
-  if (hoursApart(a.occurredAt, b.occurredAt) > 36) return false;
-  if (a.category !== b.category) return false;
-  return titleSimilarity(a.title + ' ' + a.summary, b.title + ' ' + b.summary) >= 0.4;
+  if (sharesSource(a, b)) return true;
+  if (hoursApart(a.occurredAt, b.occurredAt) > DUPLICATE_HOURS) return false;
+  const sim = titleSimilarity(a.title + ' ' + a.summary, b.title + ' ' + b.summary);
+  if (a.category === b.category) return sim >= DUPLICATE_SIMILARITY;
+  return sim >= DUPLICATE_SIMILARITY_ACROSS_CATEGORY;
 }
 
 function mergeSources(a: SourceRef[], b: SourceRef[]): SourceRef[] {

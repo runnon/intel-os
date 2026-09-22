@@ -82,6 +82,12 @@ wedge that renders nothing — see docs/DECISIONS.md before upgrading).
 For ingest changes: `cd worker && npx tsx src/seed.ts` must publish an issue and a
 second run must dedupe to 0 new events.
 
+For a "these register entries look like repeats" report: `npx tsx scripts/audit-duplicates.ts
+--aor <AOR> --merge` (needs `worker/.env`) prints the duplicate clusters under the live
+`isDuplicate` rule and the fold plan; `--apply` executes it. Ingest never re-compares
+stored events with each other, so a repeat that slipped through once stays for 30 days
+until folded. See docs/DECISIONS.md 2026-09-22.
+
 ## Secrets & publication rules
 
 - This repo is PUBLIC. Never commit: `.env*` (except `.env.example`), tokens, the two

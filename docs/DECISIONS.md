@@ -1,5 +1,39 @@
 # Decision Log
 
+## 2026-09-22 — Repeats in the register: shared-source dedup + a corpus merge tool
+
+**Report (Xavier):** CENTCOM register entries 10, 14 and 16 read as the same incident,
+and other theaters may carry the same kind of repeat.
+
+**Root cause (from the rule, not the rows — the live DB is not reachable from the coding
+sandbox):** ingest-time dedup (`isDuplicate`, `packages/core/src/dedup.ts`) required same
+place AND same category AND occurrence times within 36 h AND ≥0.4 text overlap. A story
+that stays in an RSS feed is re-fetched on later 12-hour cycles and re-extracted; each pass
+can relabel the category ("strike" → "air-defense") or slide `occurredAt` from the event day to
+the publication day, and either miss alone made the same article a "new" event. And the
+pipeline only compares NEW candidates against stored events — it never re-compares stored
+events with each other — so a repeat that got through once stays in every issue for the
+30-day window.
+
+**Decision:** (1) `isDuplicate` now treats two same-AOR, same-place events that cite the
+**same source URL** as one incident regardless of category or time (a roundup article about
+two places still yields two events because the place check stays); (2) a differing
+category no longer blocks a merge when text overlap is ≥0.6; (3) the 36 h time window is
+deliberately **not** widened — a nightly strike series on one base is several real events,
+and AUTO-2's rule stands: merging two different events is worse than listing one twice.
+(4) `scripts/audit-duplicates.ts` now loads sources (so the new rule applies), filters with
+`--aor`, and gains `--merge` (dry-run plan) / `--merge --apply` (fold each cluster into its
+earliest event: sources move to the keeper, the rest are deleted; issues are immutable
+snapshots so no published sheet changes).
+
+**Operating step:** run `npx tsx scripts/audit-duplicates.ts --aor CENTCOM --merge` from a
+machine with `worker/.env`, confirm the plan names 10/14/16, then `--apply`; then run it
+without `--aor` for the other five commands.
+
+**Re-entry path:** if the shared-source rule ever merges two genuinely distinct incidents
+(same article, same place, two events), add a text-overlap floor to the shared-source
+branch rather than dropping it — the `dedup (AUTO-2)` tests pin the intended behaviour.
+
 ## 2026-09-22 — Drop every classification marking ("UNCLASSIFIED", "(U)")
 
 **Decision (Xavier):** Remove the word UNCLASSIFIED from every surface — the top/bottom
