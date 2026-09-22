@@ -8,7 +8,7 @@ import { applyView, decodeView } from "@/lib/urlState";
 import TheaterMap, { type NumberedEvent } from "./TheaterMap";
 import { zulu } from "./TheaterView";
 
-const MARKING = "UNCLASSIFIED · OPEN SOURCES ONLY · NOT AN OFFICIAL GOVERNMENT PRODUCT";
+const MARKING = "OPEN SOURCES ONLY · NOT AN OFFICIAL GOVERNMENT PRODUCT";
 const COLS = 4; // event-register columns
 const ROW_GAP = 6; // px, matches gap-1.5
 // Vertical space available for register cards on one page, in px. The page is a
@@ -203,7 +203,7 @@ export default function ReportSheet({ issue, backHref }: { issue: IssueRow; back
         </div>
 
         <div className="border border-black/20 bg-[#ece8db] px-3 py-1.5 mt-2 font-mono text-[9px] leading-snug shrink-0">
-          (U) This sheet is generated unattended from publicly available reporting. It contains
+          This sheet is generated unattended from publicly available reporting. It contains
           reported facts only — no key judgements, no assessment, and no analysis of alternatives.
           Judgement publishes solely in a separately signed assessment product over a named
           analyst&apos;s signature. No such product accompanies this issue.
@@ -244,7 +244,7 @@ export default function ReportSheet({ issue, backHref }: { issue: IssueRow; back
             </div>
           </div>
           <div>
-            <h4 className="font-mono text-[9px] tracking-widest text-black/60">(U) METHODOLOGY</h4>
+            <h4 className="font-mono text-[9px] tracking-widest text-black/60">METHODOLOGY</h4>
             <p className="font-mono text-[8px] text-black/55 mt-1 leading-snug">
               Numbered points are events, chronological within the issue window; closely co-located
               symbols are slightly displaced for legibility, true positions kept in the data.
@@ -261,7 +261,7 @@ export default function ReportSheet({ issue, backHref }: { issue: IssueRow; back
       {pages.map((chunkEvents, i) => (
         <ReportPage key={i} pageNo={nextPage()} pageCount={pageCount} serial={issue.serial}>
           <div className="flex items-baseline justify-between border-b-2 border-[#171712] pb-1 shrink-0">
-            <h2 className="headline text-lg">(U) Event Register{pages.length > 1 ? ` — ${i + 1}/${pages.length}` : ""}</h2>
+            <h2 className="headline text-lg">Event Register{pages.length > 1 ? ` — ${i + 1}/${pages.length}` : ""}</h2>
             <span className="font-mono text-[10px] text-black/55">
               {issue.serial} · {filtered.length} EVENTS · INFO CUT-OFF {zulu(issue.info_cutoff)}
             </span>
@@ -277,12 +277,12 @@ export default function ReportSheet({ issue, backHref }: { issue: IssueRow; back
       {/* ---- SUMMARY page: change log + sources ---- */}
       <ReportPage pageNo={nextPage()} pageCount={pageCount} serial={issue.serial}>
         <div className="flex items-baseline justify-between border-b-2 border-[#171712] pb-1 shrink-0">
-          <h2 className="headline text-lg">(U) Change &amp; Sourcing</h2>
+          <h2 className="headline text-lg">Change &amp; Sourcing</h2>
           <span className="font-mono text-[10px] text-black/55">{issue.serial}</span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
           <div className="border border-black/20 p-3">
-            <h4 className="font-mono text-[10px] tracking-widest text-black/60">(U) CHANGE FROM PREVIOUS ISSUE</h4>
+            <h4 className="font-mono text-[10px] tracking-widest text-black/60">CHANGE FROM PREVIOUS ISSUE</h4>
             {issue.change_log?.length ? (
               <ul className="mt-1.5 space-y-0.5 text-[10px] font-mono">
                 {issue.change_log.slice(0, 16).map((c, i) => (
@@ -300,7 +300,7 @@ export default function ReportSheet({ issue, backHref }: { issue: IssueRow; back
             )}
           </div>
           <div className="border border-black/20 p-3">
-            <h4 className="font-mono text-[10px] tracking-widest text-black/60">(U) SOURCE SUMMARY STATEMENT</h4>
+            <h4 className="font-mono text-[10px] tracking-widest text-black/60">SOURCE SUMMARY STATEMENT</h4>
             <p className="mt-1.5 text-[10px] leading-relaxed">{issue.source_summary?.statement}</p>
           </div>
         </div>

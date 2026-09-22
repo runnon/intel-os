@@ -1,5 +1,34 @@
 # Decision Log
 
+## 2026-09-22 — Drop every classification marking ("UNCLASSIFIED", "(U)")
+
+**Decision (Xavier):** Remove the word UNCLASSIFIED from every surface — the top/bottom
+page banners, the report-sheet page banners, the analyst-draft marking line and prompt,
+the home-page tag, and the README — and drop the `(U)` portion marks from the report
+sheet's section headings and methodology note. The banners now read
+`OPEN SOURCES ONLY · NOT AN OFFICIAL GOVERNMENT PRODUCT`.
+
+**Why:** an outside reader took the classification-style banner as a sign the site was
+publishing leaked classified reports that had been "marked down". A classification
+marking, even UNCLASSIFIED, implies the material passed through a government
+classification system, which is the opposite of what this product is: reporting derived
+entirely from publicly available sources. The MARK-2 statement (open sources, not
+official) already carries the intent; the classification vocabulary only added risk.
+
+**What did NOT change:** the MARK-2 disclaimer on every issue (`DISCLAIMER` in
+`packages/core/src/issue.ts`), MARK-3 (no seals, no official-looking serials), MARK-4
+(public sources only, IL2-clean data). The `issues.disclaimer` column and stored issues
+are untouched (AUTO-10). The NIPRNet/IL2 discussion in `docs/VISION.md` still uses the
+word in its technical sense (network and impact-level names), which is fine — the rule
+is about markings on the product, not about the vocabulary of the docs.
+
+**Guard:** `web/test/markings.test.ts` reads the marking-bearing web files and fails on
+any `UNCLASSIFIED` or `(U)` portion mark; AGENTS.md invariant 7 is reworded accordingly.
+**Re-entry path:** if a classification marking is ever wanted again (e.g. an accredited
+deployment on a network that requires one), make it a maintainer decision here, delete the
+guard test deliberately, and apply it via one constant per surface — never re-add it
+inline.
+
 ## 2026-09-17 — Persistent installations layer + command switcher
 
 **Installations (Decision, Xavier):** Show the theater's curated bases *always* (not only

@@ -11,13 +11,14 @@ export const metadata: Metadata = {
     "Live, filterable geospatial picture of a theater from open sources — exportable as a briefable sheet. Not an official government product.",
 };
 
-// MARK-1/MARK-2: banner on every surface — marking convention plus the
-// not-official / open-sources-only statement. MARK-3: no seals, no agency
-// branding anywhere in this tree.
+// MARK-2: banner on every surface — the not-official / open-sources-only
+// statement. MARK-3: no seals, no agency branding, and NO classification
+// markings (no "UNCLASSIFIED", no "(U)") anywhere in this tree — see
+// docs/DECISIONS.md 2026-09-22.
 function Banner() {
   return (
     <div className="bg-[#1f4a2e] text-[#dcead9] text-center text-[11px] tracking-[0.25em] font-mono py-1 select-none shrink-0">
-      UNCLASSIFIED&ensp;·&ensp;OPEN SOURCES ONLY&ensp;·&ensp;NOT AN OFFICIAL
+      OPEN SOURCES ONLY&ensp;·&ensp;NOT AN OFFICIAL
       GOVERNMENT PRODUCT
     </div>
   );

@@ -77,7 +77,7 @@ export default async function Home() {
     <main className="flex-1 overflow-y-auto">
       <div className="max-w-5xl mx-auto px-6 py-10">
         <header className="mb-8">
-          <p className="mb-3"><span className="tag">Unclassified Theater Awareness</span></p>
+          <p className="mb-3"><span className="tag">Open-Source Theater Awareness</span></p>
           <div className="flex items-end justify-between flex-wrap gap-3">
             <h1 className="headline text-5xl text-[#171712]">Theater Picture</h1>
             <a href="/analyst" className="font-mono text-xs px-3 py-1.5 rounded-md border border-[#171712] text-[#171712] hover:bg-[#eae4d2]">

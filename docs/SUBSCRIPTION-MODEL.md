@@ -72,8 +72,8 @@ removing context from current events.
 - The map and event index state the public cut-off explicitly.
 - The archive page may list immutable serial metadata, but opening a snapshot
   outside the public window requires Analyst access.
-- Every page and upgrade surface retains the UNCLASSIFIED / open-sources /
-  not-official markings.
+- Every page and upgrade surface retains the open-sources / not-official
+  markings (no classification markings — see docs/DECISIONS.md 2026-09-22).
 
 ## Access-control architecture
 

@@ -4,8 +4,9 @@ A web product where an intelligence professional picks a combatant command and g
 live, filterable geospatial picture of that theater — then exports it as a doctrinally
 correct, briefable sheet.
 
-**Unclassified, open sources only, forever.** Not an official product of any government
-agency. MIT licensed — see `LICENSE` and `CONTRIBUTING.md`.
+**Open sources only, forever.** Not an official product of any government agency, and
+not a document produced under any classification system — it carries no classification
+markings. MIT licensed — see `LICENSE` and `CONTRIBUTING.md`.
 
 **Live**: https://intel-os.org (all six combatant commands, 12-hour unattended cycle)
 
