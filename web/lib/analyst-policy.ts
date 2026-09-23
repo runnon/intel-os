@@ -2,7 +2,9 @@ export const DATA_TIMEOUT_MS = 10_000;
 export const MODEL_TIMEOUT_MS = 60_000;
 export const DRAFT_DISCLAIMER =
   "MACHINE-GENERATED DRAFT — reported facts only, not a published product, carries no analytic judgement.";
-export const MARKING_LINE = "UNCLASSIFIED · OPEN SOURCES ONLY · NOT AN OFFICIAL GOVERNMENT PRODUCT";
+// No classification markings ("UNCLASSIFIED", "(U)") — this is an open-source product,
+// not a document produced under any classification system (docs/DECISIONS.md 2026-09-22).
+export const MARKING_LINE = "OPEN SOURCES ONLY · NOT AN OFFICIAL GOVERNMENT PRODUCT";
 
 const MAX_MESSAGES = 12;
 const MAX_MESSAGE_CHARS = 6_000;

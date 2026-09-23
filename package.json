@@ -9,6 +9,7 @@
   "scripts": {
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "start": "npm start -w worker"
+    "start": "npm start -w worker",
+    "audit:duplicates": "tsx scripts/audit-duplicates.ts"
   }
 }

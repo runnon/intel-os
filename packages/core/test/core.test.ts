@@ -188,8 +188,9 @@ describe('dedup (AUTO-2)', () => {
   });
 
   it('does not merge events far apart in time', () => {
-    const a = ev({ id: 'a' });
-    const b = ev({ id: 'b', occurredAt: '2026-09-12T06:00:00Z' });
+    // Distinct articles: two incidents four days apart never share a source URL.
+    const a = ev({ id: 'a', sources: [{ url: 'https://example.com/day1', outlet: 'Example' }] });
+    const b = ev({ id: 'b', occurredAt: '2026-09-12T06:00:00Z', sources: [{ url: 'https://example.com/day5', outlet: 'Example' }] });
     expect(isDuplicate(a, b)).toBe(false);
   });
 
@@ -203,6 +204,44 @@ describe('dedup (AUTO-2)', () => {
     expect(fresh.map((e) => e.id)).toEqual(['c2']);
     expect(merged).toHaveLength(1);
     expect(merged[0]!.sources).toHaveLength(2);
+  });
+
+  it('merges a re-extraction of the SAME article even when category and occurrence day drift', () => {
+    // The 2026-09-22 CENTCOM case: one story re-fetched on later cycles came back with a
+    // different category and an occurredAt that slid to the publication day, so three
+    // rows of the same strike sat in one register.
+    const a = ev({ id: 'a', title: 'Missile strike on air base', category: 'strike', occurredAt: '2026-09-08T06:00:00Z' });
+    const b = ev({
+      id: 'b',
+      title: 'Air base hit; damage assessment under way',
+      summary: 'Officials confirmed the overnight impact.',
+      category: 'air-defense',
+      occurredAt: '2026-09-10T09:00:00Z', // 51h later: outside the time window
+      sources: [{ url: 'https://example.com/a', outlet: 'Example' }, { url: 'https://other.com/b', outlet: 'Other' }],
+    });
+    expect(isDuplicate(a, b)).toBe(true);
+    expect(mergeEvents(a, b).sources.map((s) => s.url)).toEqual(['https://example.com/a', 'https://other.com/b']);
+  });
+
+  it('a shared article about two DIFFERENT places stays two events (roundup articles)', () => {
+    const a = ev({ id: 'a' });
+    const b = ev({ id: 'b', placeName: 'NSA Bahrain', lat: 26.21, lon: 50.61, title: 'Drones damage NSA Bahrain piers' });
+    // same URL, different place
+    expect(isDuplicate(a, b)).toBe(false);
+  });
+
+  it('merges across a differing category only on high text overlap', () => {
+    const a = ev({ id: 'a', title: 'Iranian missiles strike Muwaffaq Salti air base', summary: 'Ballistic missiles engaged over the base.', category: 'strike', sources: [{ url: 'https://x.com/1', outlet: 'X' }] });
+    const high = ev({ id: 'h', title: 'Iranian missiles strike Muwaffaq Salti air base overnight', summary: 'Ballistic missiles engaged over the base.', category: 'air-defense', sources: [{ url: 'https://y.com/2', outlet: 'Y' }] });
+    const low = ev({ id: 'l', title: 'Base reopens runway after missiles', summary: 'Flights resume.', category: 'infrastructure', sources: [{ url: 'https://z.com/3', outlet: 'Z' }] });
+    expect(isDuplicate(a, high)).toBe(true);
+    expect(isDuplicate(a, low)).toBe(false);
+  });
+
+  it('never widens the time window for distinct incidents at the same place', () => {
+    const a = ev({ id: 'a', sources: [{ url: 'https://x.com/mon', outlet: 'X' }] });
+    const b = ev({ id: 'b', occurredAt: '2026-09-10T06:00:00Z', sources: [{ url: 'https://x.com/wed', outlet: 'X' }] });
+    expect(isDuplicate(a, b)).toBe(false); // a second strike two nights later is a second event
   });
 
   it('titleSimilarity is symmetric-ish and bounded', () => {

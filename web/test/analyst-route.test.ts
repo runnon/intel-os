@@ -108,7 +108,7 @@ describe("analyst route", () => {
     expect(parseChatMessages({ messages })).toHaveLength(12);
   });
 
-  it("enforces draft and classification markings in model output", () => {
+  it("enforces draft and provenance markings in model output", () => {
     const marked = enforceDraftMarkings("Reported event.");
     expect(marked).toContain(DRAFT_DISCLAIMER);
     expect(marked).toContain("Reported event.");

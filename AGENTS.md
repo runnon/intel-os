@@ -46,8 +46,13 @@ Concretely, always verify:
    failure. Never add partial-publish behavior.
 6. **AUTO-10:** published issues are immutable. Never add code that mutates a
    published issue row; corrections happen via new issues and event revisions (DATA-6).
-7. **MARK-2/3:** the UNCLASSIFIED / open-sources / not-official banners stay on every
-   page and every export. No agency seals or official-looking serials, ever.
+7. **MARK-2/3:** the open-sources / not-official banners stay on every page and every
+   export. No agency seals or official-looking serials, ever. **No classification
+   markings, ever** — no "UNCLASSIFIED" banner, no "(U)" portion marks, nothing that
+   reads as a marking from a government classification system. The product is open-source
+   reporting, not a declassified or leaked document, and a classification-style banner
+   was read by outsiders as implying the opposite (decision 2026-09-22; guarded by
+   `web/test/markings.test.ts`).
 8. **Multi-AOR ingest:** every cron cycle sweeps all six combatant commands
    (`worker/src/index.ts` loops `configuredAors`; override with an `AORS` csv env
    var). All sources are fetched ONCE into a shared pool (`fetchGlobalPool`);
@@ -76,6 +81,12 @@ wedge that renders nothing — see docs/DECISIONS.md before upgrading).
 
 For ingest changes: `cd worker && npx tsx src/seed.ts` must publish an issue and a
 second run must dedupe to 0 new events.
+
+For a "these register entries look like repeats" report: `npx tsx scripts/audit-duplicates.ts
+--aor <AOR> --merge` (needs `worker/.env`) prints the duplicate clusters under the live
+`isDuplicate` rule and the fold plan; `--apply` executes it. Ingest never re-compares
+stored events with each other, so a repeat that slipped through once stays for 30 days
+until folded. See docs/DECISIONS.md 2026-09-22.
 
 ## Secrets & publication rules
 

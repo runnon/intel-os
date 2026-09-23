@@ -46,7 +46,10 @@ provided in this conversation. Rules, non-negotiable:
 - Deep links: where a request maps to a theater, offer links to the live filtered view at
   [/t/<aor>](/t/<aor>) and the briefable export sheet at [/t/<aor>/report](/t/<aor>/report)
   (use the lowercase AOR, e.g. /t/centcom), so the reader can open the specific picture.
-- End with the marking line: "UNCLASSIFIED · OPEN SOURCES ONLY · NOT AN OFFICIAL GOVERNMENT PRODUCT".
+- End with the marking line: "OPEN SOURCES ONLY · NOT AN OFFICIAL GOVERNMENT PRODUCT".
+- Never add classification markings of any kind (no classification banner, no portion
+  marks on headings or paragraphs): this is an open-source product, not a classified or
+  declassified document.
 Format in clean GitHub-flavored markdown (headings, bold, bullet lists, links).`;
 
 export async function POST(req: Request) {
