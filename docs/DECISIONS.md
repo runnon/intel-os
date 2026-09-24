@@ -1,5 +1,41 @@
 # Decision Log
 
+## 2026-09-24 — Visitors per day: server-side page-view capture (no browser script)
+
+**Ask (Xavier):** see how many visitors intel-os.org gets per day.
+
+**Finding:** nothing recorded a visit. Analytics were server-side only and fired six
+product events (sign-in, pricing, checkout, subscription); there was no `$pageview`, and
+by design no browser analytics script (NFR-4/5 — nothing a DoD network filter could block
+or a vendor revoke). So there was no history to show.
+
+**Decision:** capture `$pageview` **on the server**, in `web/proxy.ts`, for every human
+HTML document request, through the existing `lib/analytics.ts` client. The decision of
+what counts is pure and tested (`web/lib/visits.ts`, `web/test/visits.test.ts`): GET +
+`Accept: text/html`, not an RSC/prefetch fetch, not `/api`, `/_next`, `/auth` or a static
+file, and not a bot UA. The visitor id is `sha256(salt | UTC day | IP | UA)[:32]` — it
+rotates daily, cannot be reversed to an IP, and neither IP nor UA is stored on the event
+(`$process_person_profile: false`, so PostHog keeps no person either). "Visitors per day"
+is `count(DISTINCT distinct_id)` per day; ids deliberately do NOT join across days.
+
+**NIPRNet posture unchanged:** still zero browser dependencies; the capture is a
+server→PostHog call that is a NO-OP unless `POSTHOG_KEY`/`POSTHOG_HOST` are set, exactly
+like the existing product events, so a gov build emits nothing. Optional
+`VISITOR_HASH_SALT` decouples the hash from the project key (falls back to `POSTHOG_KEY`).
+The proxy matcher widened to all non-static routes for the capture; the Supabase session
+refresh still runs only on its original auth paths (`AUTH_PATH`), so auth behaviour is
+byte-for-byte what it was.
+
+**Reading it:** `npm run visitors` (`scripts/visitors.ts`; needs a personal API key with
+`query:read` and the project id `POSTHOG_KEY` writes into) prints visitors and page views
+per day, `--pages` adds top pages. Until the first deploy with this hook, the answer is
+"no data" — there is no retroactive source (Vercel's dashboard shows raw request counts
+only).
+
+**Re-entry path:** to drop capture entirely, delete the `capturePageView` call in
+`proxy.ts` and restore its narrow matcher; to make ids stable across days (a real
+"unique people" count) you would need a cookie — a product decision, not a code tweak.
+
 ## 2026-09-22 — Repeats in the register: shared-source dedup + a corpus merge tool
 
 **Report (Xavier):** CENTCOM register entries 10, 14 and 16 read as the same incident,
