@@ -82,6 +82,10 @@ wedge that renders nothing — see docs/DECISIONS.md before upgrading).
 For ingest changes: `cd worker && npx tsx src/seed.ts` must publish an issue and a
 second run must dedupe to 0 new events.
 
+For "how many visitors" questions: `npm run visitors` (needs `POSTHOG_PERSONAL_API_KEY`
++ `POSTHOG_PROJECT_ID`). Page views are captured SERVER-SIDE in `web/proxy.ts` via the
+pure `lib/visits.ts` (no browser script — NFR-4/5); see docs/DECISIONS.md 2026-09-24.
+
 For a "these register entries look like repeats" report: `npx tsx scripts/audit-duplicates.ts
 --aor <AOR> --merge` (needs `worker/.env`) prints the duplicate clusters under the live
 `isDuplicate` rule and the fold plan; `--apply` executes it. Ingest never re-compares
