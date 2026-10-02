@@ -37,8 +37,8 @@ web/      Next.js theater view (Vercel): command selector → MapLibre map with
           milsymbol 2525E symbols, synced event list, time control, URL-encoded
           filter state, per-event sourcing and confidence
 supabase/ Postgres schema: events, event_sources, event_revisions, issues
-          (immutable snapshots), ingest_runs. RLS exposes a public 72-hour
-          projection and entitled archive reads; ingest writes use service role only.
+          (immutable snapshots), ingest_runs. Everything is free: anon reads
+          full issues + archive via SECURITY DEFINER projections; ingest writes use service role only.
 docs/     VISION.md (long-term goal) · DECISIONS.md · symbology/ (MIL-STD-2525E
           w/CHG 1 + machine-readable tables)
 research/ Market, NIPRNet/compliance, and 14N-workflow research reports

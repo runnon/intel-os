@@ -29,10 +29,13 @@ export interface IssueMetadata {
 }
 
 /**
- * The public RPC already removes old event payloads. Recompute summaries here so
- * a 30-day aggregate is never presented as if it described the public 72-hour slice.
+ * Recompute an issue's tempo/change-log/source summary from the snapshot it actually
+ * carries. Used for the merged "All theaters" view, and as a safety net when a
+ * projection's snapshot does not match its canonical aggregates (e.g. a database that
+ * still serves the retired 72-hour public projection) so counts never describe events
+ * the viewer isn't shown.
  */
-export function summarizePublicIssue(issue: IssueRow): IssueRow {
+export function summarizeIssue(issue: IssueRow): IssueRow {
   const snapshot = issue.snapshot ?? [];
   const ids = new Set(snapshot.map((event) => event.id));
   const outletCounts: Record<string, number> = {};
@@ -75,23 +78,33 @@ export function summarizePublicIssue(issue: IssueRow): IssueRow {
       totalSources,
       singleSourceEvents,
       statement: outletTotal
-        ? `Public 72-hour picture derives from ${totalSources} report(s) across ${outletTotal} outlet(s): ${outletSummary}.`
-        : "No events fall inside the public 72-hour window.",
+        ? `Picture derives from ${totalSources} report(s) across ${outletTotal} outlet(s): ${outletSummary}.`
+        : "No events fall inside this window.",
     },
   };
 }
 
-/** Latest public 72-hour issue per AOR — powers the command selector tiles. */
+/**
+ * A canonical issue row is served verbatim (AUTO-10: reproduced unchanged). The worker
+ * builds tempo from the same event array it snapshots, so a mismatch means the row is a
+ * filtered projection and its aggregates must be recomputed.
+ */
+export function canonicalOrSummarized(issue: IssueRow): IssueRow {
+  const snapshotLength = issue.snapshot?.length ?? 0;
+  return issue.tempo?.totalEvents === snapshotLength ? issue : summarizeIssue(issue);
+}
+
+/** Latest issue per AOR (full canonical snapshot) — powers the command selector tiles. */
 export async function latestIssues(): Promise<IssueRow[]> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc("public_latest_issues");
   if (error) throw new Error(error.message);
-  return ((data ?? []) as IssueRow[]).map(summarizePublicIssue);
+  return ((data ?? []) as IssueRow[]).map(canonicalOrSummarized);
 }
 
 /**
- * Combined "All theaters" view: every AOR's latest public 72-hour events merged onto one
- * global map. Uses the public per-AOR projections (the map fits to the combined extent).
+ * Combined "All theaters" view: every AOR's latest issue merged onto one global map
+ * (the map fits to the combined extent).
  */
 export async function combinedLatestIssue(): Promise<IssueRow | null> {
   const issues = await latestIssues();
@@ -100,48 +113,36 @@ export async function combinedLatestIssue(): Promise<IssueRow | null> {
   const snapshot = issues.flatMap((i) => i.snapshot ?? []);
   const infoCutoff = issues.reduce((m, i) => (i.info_cutoff > m ? i.info_cutoff : m), issues[0].info_cutoff);
   const windowStart = issues.reduce((m, i) => (i.window_start < m ? i.window_start : m), issues[0].window_start);
-  return summarizePublicIssue({
+  return summarizeIssue({
     ...base,
     serial: "ALL-THEATERS",
     snapshot,
+    change_log: issues.flatMap((i) => i.change_log ?? []),
     info_cutoff: infoCutoff,
     window_start: windowStart,
   });
 }
 
-/** Current issue: full canonical snapshot for Analyst, 72-hour projection for Public. */
-export async function latestIssueFor(aor: Aor, hasArchiveAccess = false): Promise<IssueRow | null> {
+/**
+ * Current issue for an AOR, free for everyone. Read through a SECURITY DEFINER
+ * projection with the anon key — the raw issues table is not readable by anon and no
+ * service-role key lives in the web app.
+ */
+export async function latestIssueFor(aor: Aor): Promise<IssueRow | null> {
   const supabase = await createSupabaseServerClient();
-  if (hasArchiveAccess) {
-    const { data, error } = await supabase
-      .from("issues")
-      .select("*")
-      .eq("aor", aor)
-      .order("issue_number", { ascending: false })
-      .limit(1);
-    if (error) throw new Error(error.message);
-    return (data?.[0] as IssueRow | undefined) ?? null;
-  }
-
   const { data, error } = await supabase.rpc("public_latest_issue", { p_aor: aor });
   if (error) throw new Error(error.message);
   const issue = (data?.[0] as IssueRow | undefined) ?? null;
-  return issue ? summarizePublicIssue(issue) : null;
+  return issue ? canonicalOrSummarized(issue) : null;
 }
 
-/** Serial snapshot: full for Analyst; recent, filtered snapshot for Public. */
-export async function issueBySerial(serial: string, hasArchiveAccess = false): Promise<IssueRow | null> {
+/** Any published issue by serial (AUTO-10), free for everyone. */
+export async function issueBySerial(serial: string): Promise<IssueRow | null> {
   const supabase = await createSupabaseServerClient();
-  if (hasArchiveAccess) {
-    const { data, error } = await supabase.from("issues").select("*").eq("serial", serial).limit(1);
-    if (error) throw new Error(error.message);
-    return (data?.[0] as IssueRow | undefined) ?? null;
-  }
-
   const { data, error } = await supabase.rpc("public_issue_by_serial", { p_serial: serial });
   if (error) throw new Error(error.message);
   const issue = (data?.[0] as IssueRow | undefined) ?? null;
-  return issue ? summarizePublicIssue(issue) : null;
+  return issue ? canonicalOrSummarized(issue) : null;
 }
 
 export async function issueArchive(aor: Aor): Promise<IssueMetadata[]> {
@@ -149,11 +150,4 @@ export async function issueArchive(aor: Aor): Promise<IssueMetadata[]> {
   const { data, error } = await supabase.rpc("public_issue_archive", { p_aor: aor });
   if (error) throw new Error(error.message);
   return (data ?? []) as IssueMetadata[];
-}
-
-export async function issueMetadataBySerial(serial: string): Promise<IssueMetadata | null> {
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.rpc("public_issue_metadata", { p_serial: serial });
-  if (error) throw new Error(error.message);
-  return (data?.[0] as IssueMetadata | undefined) ?? null;
 }

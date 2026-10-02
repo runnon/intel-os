@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyView, decodeView, DEFAULT_VIEW, encodeView, enforceAccessWindow, type FilterableEvent } from '../lib/urlState';
+import { applyView, decodeView, DEFAULT_VIEW, encodeView, type FilterableEvent } from '../lib/urlState';
 
 const CUTOFF = '2026-09-15T12:00:00Z';
 
@@ -42,11 +42,11 @@ describe('view state URL round-trip (UX-2)', () => {
     expect(v.confidenceFloor).toBe('low');
   });
 
-  it('clamps archive windows for public viewers without changing Analyst views', () => {
-    expect(enforceAccessWindow({ ...DEFAULT_VIEW, windowHours: null, selectedEvent: 'old' }, false))
-      .toMatchObject({ windowHours: 72, selectedEvent: null });
-    expect(enforceAccessWindow({ ...DEFAULT_VIEW, windowHours: 168 }, false).windowHours).toBe(72);
-    expect(enforceAccessWindow({ ...DEFAULT_VIEW, windowHours: 168 }, true).windowHours).toBe(168);
+  it('keeps every time window as requested — no window is locked (fully free, 2026-10-01)', () => {
+    expect(decodeView(new URLSearchParams('w=168')).windowHours).toBe(168);
+    expect(decodeView(new URLSearchParams('w=720&ev=old')).windowHours).toBe(720);
+    expect(decodeView(new URLSearchParams('w=720&ev=old')).selectedEvent).toBe('old');
+    expect(decodeView(new URLSearchParams('')).windowHours).toBeNull(); // ALL
   });
 });
 

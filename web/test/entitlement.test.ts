@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { analystQuotaLimits, isActive, type Entitlement } from "@/lib/entitlement";
+import { analystAccessFor, analystQuotaLimits, isActive, type Entitlement } from "@/lib/entitlement";
 
 function entitlement(overrides: Partial<Entitlement> = {}): Entitlement {
   return {
@@ -19,7 +19,20 @@ function entitlement(overrides: Partial<Entitlement> = {}): Entitlement {
   };
 }
 
-describe("subscription entitlement", () => {
+describe("drafting access (fully free, 2026-10-01)", () => {
+  it("grants any signed-in user, with or without an entitlement row", () => {
+    expect(analystAccessFor({ id: "user-without-entitlement" })).toBe(true);
+  });
+
+  it("still requires an identity, because the drafting quota is per user", () => {
+    expect(analystAccessFor(null)).toBe(false);
+    expect(analystAccessFor(undefined)).toBe(false);
+    expect(analystAccessFor({ id: "" })).toBe(false);
+  });
+});
+
+// The dormant Stripe routes still use isActive(); nothing in the UI gates on it.
+describe("subscription entitlement (dormant Stripe path)", () => {
   it("allows active and trialing periods that have not expired", () => {
     expect(isActive(entitlement())).toBe(true);
     expect(isActive(entitlement({ status: "trialing" }))).toBe(true);

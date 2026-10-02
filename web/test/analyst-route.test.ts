@@ -4,14 +4,15 @@ const mocks = vi.hoisted(() => ({
   createSupabaseServerClient: vi.fn(),
   createMessage: vi.fn(),
   makeModel: vi.fn(),
-  hasActiveEntitlement: vi.fn(),
+  getAnalystUser: vi.fn(),
+  rpc: vi.fn(),
   consumeAnalystQuota: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({ createSupabaseServerClient: mocks.createSupabaseServerClient }));
 vi.mock("@/lib/model", () => ({ makeModel: mocks.makeModel }));
 vi.mock("@/lib/entitlement", () => ({
-  hasActiveEntitlement: mocks.hasActiveEntitlement,
+  getAnalystUser: mocks.getAnalystUser,
   consumeAnalystQuota: mocks.consumeAnalystQuota,
 }));
 
@@ -50,17 +51,11 @@ const issue = {
 };
 
 function mockIssueQuery(data: unknown[] | null, error: unknown = null) {
-  const query = {
-    abortSignal: vi.fn(),
-    select: vi.fn(),
-    order: vi.fn(),
-    limit: vi.fn(),
-  };
-  query.select.mockReturnValue(query);
-  query.order.mockReturnValue(query);
-  query.limit.mockReturnValue(query);
+  const query = { abortSignal: vi.fn() };
   query.abortSignal.mockResolvedValue({ data, error });
-  mocks.createSupabaseServerClient.mockResolvedValue({ from: vi.fn().mockReturnValue(query) });
+  mocks.rpc.mockReturnValue(query);
+  // No .from(): drafting must read through the public projection RPC, not the raw table.
+  mocks.createSupabaseServerClient.mockResolvedValue({ rpc: mocks.rpc });
 }
 
 function analystRequest(messages: unknown = [{ role: "user", content: "Draft a short CENTCOM summary." }]) {
@@ -77,7 +72,7 @@ beforeEach(() => {
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "public-anon-key");
   vi.spyOn(console, "info").mockImplementation(() => undefined);
   vi.spyOn(console, "error").mockImplementation(() => undefined);
-  mocks.hasActiveEntitlement.mockResolvedValue(true);
+  mocks.getAnalystUser.mockResolvedValue({ id: "user-1", email: "analyst@example.com" });
   mocks.consumeAnalystQuota.mockResolvedValue("ok");
   mockIssueQuery([issue]);
   mocks.makeModel.mockReturnValue({
@@ -118,16 +113,35 @@ describe("analyst route", () => {
     expect(enforceDraftMarkings(alreadyMarked)).toBe(alreadyMarked);
   });
 
-  it("paywalls the drafting workspace without an active subscription", async () => {
-    mocks.hasActiveEntitlement.mockResolvedValue(false);
+  it("requires sign-in (free) before drafting, and never mentions a subscription", async () => {
+    mocks.getAnalystUser.mockResolvedValue(null);
 
     const response = await POST(analystRequest());
 
-    expect(response.status).toBe(402);
-    await expect(response.json()).resolves.toEqual({
-      error: "The analyst workspace requires an active subscription.",
-      code: "subscription_required",
-    });
+    expect(response.status).toBe(401);
+    const payload = await response.json() as { error: string; code: string };
+    expect(payload.code).toBe("sign_in_required");
+    expect(payload.error).not.toMatch(/subscri|trial|upgrade|\$/i);
+    expect(mocks.createMessage).not.toHaveBeenCalled();
+  });
+
+  it("lets a signed-in user with no entitlement row draft", async () => {
+    // getAnalystUser only knows about identity; there is no entitlement lookup at all.
+    const response = await POST(analystRequest());
+
+    expect(response.status).toBe(200);
+    expect(mocks.rpc).toHaveBeenCalledWith("public_latest_issues");
+    expect(mocks.createMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats a pre-migration subscription_required quota result as transient, not a paywall", async () => {
+    mocks.consumeAnalystQuota.mockResolvedValue("subscription_required");
+
+    const response = await POST(analystRequest());
+
+    expect(response.status).toBe(503);
+    const payload = await response.json() as { error: string };
+    expect(payload.error).not.toMatch(/subscri|trial|upgrade/i);
     expect(mocks.createMessage).not.toHaveBeenCalled();
   });
 

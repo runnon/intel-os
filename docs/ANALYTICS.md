@@ -33,6 +33,10 @@ prompts, issue bodies, and source content are not sent.
 
 ## Price A/B readout
 
+> **2026-10-01:** the product is fully free and no UI calls the pricing, claim, or Stripe
+> routes, so `pricing_viewed`, `pricing_intent`, `checkout_started` and `subscribed` no
+> longer fire. `signed_in` still does. The readout below is historical.
+
 During free beta, use `pricing_viewed → pricing_intent` broken down by `variant`. This is
 a fake-door price-intent measure, not a completed purchase or proven willingness to pay.
 Once charging is live, use `pricing_viewed → checkout_started → subscribed`; that funnel

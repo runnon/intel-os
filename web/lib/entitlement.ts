@@ -1,4 +1,10 @@
-import { createSupabaseServerClient, hasSupabaseAuthCookie } from "@/lib/supabase/server";
+import { createSupabaseServerClient, getSessionUser, hasSupabaseAuthCookie } from "@/lib/supabase/server";
+
+// 2026-10-01 — fully free: the paywall is removed. Archive reads need no identity at all,
+// and the drafting workspace needs only a signed-in user (the per-user drafting quota is
+// keyed on that identity). The entitlement helpers below remain for the dormant Stripe
+// routes (checkout/portal/webhook) so a paid tier can be re-enabled; nothing in the UI
+// gates on them any more. See docs/DECISIONS.md.
 
 export type Entitlement = {
   status: string;
@@ -64,10 +70,15 @@ export function isActive(ent: Entitlement | null): boolean {
   return Number.isFinite(periodEnd) && periodEnd > Date.now();
 }
 
-// The paywall boundary for the analyst drafting workspace; the situation map/updates
-// stay free and public.
-export async function hasActiveEntitlement(): Promise<boolean> {
-  return isActive(await getEntitlement());
+/** Drafting access rule: any signed-in user. No entitlement or plan is required. */
+export function analystAccessFor(user: { id: string } | null | undefined): boolean {
+  return Boolean(user?.id);
+}
+
+/** The signed-in user allowed to draft, or null when signed out. */
+export async function getAnalystUser(): Promise<{ id: string; email?: string } | null> {
+  const user = await getSessionUser();
+  return user && analystAccessFor(user) ? { id: user.id, email: user.email } : null;
 }
 
 export type AnalystQuotaResult = "ok" | "unauthenticated" | "subscription_required" | "minute_limit" | "trial_limit" | "monthly_limit";

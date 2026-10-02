@@ -55,7 +55,7 @@ function SignInForm() {
           window.location.assign(next);
           return;
         }
-        setNotice("Check your email to confirm your account, then continue to Analyst access.");
+        setNotice("Check your email to confirm your account, then sign in to start drafting.");
         return;
       }
 
@@ -83,12 +83,12 @@ function SignInForm() {
           <a href="/" className="font-mono text-xs tracking-widest text-[#6b675c] hover:text-[#8a6100]">
             // THEATER PICTURE
           </a>
-          <p className="mt-4 font-mono text-[10px] text-[#8a6100]">STEP 1 OF 2 · ACCOUNT</p>
+          <p className="mt-4 font-mono text-[10px] text-[#8a6100]">FREE ACCOUNT</p>
           <h1 className="headline text-2xl mt-1">{title}</h1>
           <p className="text-sm text-black/70 mt-2 leading-relaxed">
             {mode === "recover"
               ? "Enter your account email and we’ll send a secure reset link."
-              : "Use your email and password. After sign-in, continue to Analyst plan selection."}
+              : "Use your email and password. Accounts are free and unlock the drafting workspace."}
           </p>
 
           {mode !== "recover" && (

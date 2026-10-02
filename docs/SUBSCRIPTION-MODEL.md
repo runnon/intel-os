@@ -1,6 +1,8 @@
 # Hosted subscription model
 
-Status: **accepted 2026-09-17 and implemented by the subscription hardening migration**.
+Status: **superseded 2026-10-01 — the product is fully free; no paywall** (docs/DECISIONS.md,
+"Fully free: paywall removed"). Accepted 2026-09-17; kept as the design record and the
+re-entry path for a paid tier.
 
 ## Product principle
 
