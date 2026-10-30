@@ -34,6 +34,7 @@ const POI_LABELS: Record<PointFeature["category"], string> = {
   city: "City",
 };
 import { installationSymbolFor, symbolFor } from "@/lib/symbols";
+import { COMMUNITY_COLOR } from "@/lib/community";
 
 // NFR-4/NFR-5: MapLibre (BSD) + OpenStreetMap-derived vector tiles. No token, no
 // commercial tile service that can revoke access. Interim style is OpenFreeMap;
@@ -58,6 +59,16 @@ export interface NumberedEvent extends TheaterEvent {
   num: number; // chronological serial within the issue (proof-build style)
 }
 
+/** A community report placed by the gazetteer (web/lib/community.ts). Never an event. */
+export interface CommunityPoint {
+  id: string;
+  lat: number;
+  lon: number;
+  title: string;
+  placeName: string;
+  precision: "point" | "settlement" | "region";
+}
+
 interface Props {
   events: NumberedEvent[]; // pre-filtered, all with lat/lon
   selectedId: string | null;
@@ -72,6 +83,11 @@ interface Props {
   // "All theaters" mode: events span every AOR, so start on a world view and skip the
   // per-AOR overlays (blocs/installations/infra) that key on a single command.
   allTheaters?: boolean;
+  // Off-by-default community layer: unverified reports drawn as plain purple dots,
+  // separate from (and beneath) the event symbols. Empty/undefined = layer off.
+  community?: CommunityPoint[];
+  selectedCommunityId?: string | null;
+  onSelectCommunity?: (id: string) => void;
 }
 
 /**
@@ -119,7 +135,17 @@ function toGeoJSON(events: NumberedEvent[]): GeoJSON.FeatureCollection {
   };
 }
 
-export default function TheaterMap({ events, selectedId, onSelect, forExport = false, referenceEvents, allTheaters = false }: Props) {
+export default function TheaterMap({
+  events,
+  selectedId,
+  onSelect,
+  forExport = false,
+  referenceEvents,
+  allTheaters = false,
+  community,
+  selectedCommunityId = null,
+  onSelectCommunity,
+}: Props) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const readyRef = useRef(false);
@@ -134,6 +160,10 @@ export default function TheaterMap({ events, selectedId, onSelect, forExport = f
   const layoutRef = useRef<Map<string, [number, number]>>(new Map());
   const selectedIdRef = useRef<string | null>(selectedId);
   selectedIdRef.current = selectedId;
+  const communityRef = useRef({ points: community ?? [], selected: selectedCommunityId });
+  communityRef.current = { points: community ?? [], selected: selectedCommunityId };
+  const onSelectCommunityRef = useRef(onSelectCommunity);
+  onSelectCommunityRef.current = onSelectCommunity;
 
   useEffect(() => {
     if (!container.current || mapRef.current) return;
@@ -416,7 +446,46 @@ export default function TheaterMap({ events, selectedId, onSelect, forExport = f
         },
       });
 
+      // Community reports (unverified): small purple dots drawn over the event symbols
+      // so they stay findable in dense theaters once someone turns the layer on.
+      // Region-precision reports get a faint wide halo.
+      map.addSource("community", { type: "geojson", data: communityGeoJSON(communityRef.current.points, communityRef.current.selected) });
+      map.addLayer({
+        id: "community-area",
+        type: "circle",
+        source: "community",
+        filter: ["==", ["get", "precision"], "region"],
+        paint: {
+          "circle-radius": 16,
+          "circle-color": COMMUNITY_COLOR,
+          "circle-opacity": 0.1,
+          "circle-stroke-color": COMMUNITY_COLOR,
+          "circle-stroke-width": 1,
+          "circle-stroke-opacity": 0.45,
+        },
+      });
+      map.addLayer({
+        id: "community-points",
+        type: "circle",
+        source: "community",
+        paint: {
+          "circle-radius": ["case", ["get", "sel"], 8, 5.5],
+          "circle-color": COMMUNITY_COLOR,
+          "circle-opacity": 0.9,
+          "circle-stroke-color": ["case", ["get", "sel"], "#171712", "#f5f2ea"],
+          "circle-stroke-width": ["case", ["get", "sel"], 2.5, 1.5],
+        },
+      });
+      map.on("click", "community-points", (ev: maplibregl.MapLayerMouseEvent) => {
+        const id = ev.features?.[0]?.properties?.id;
+        if (id) onSelectCommunityRef.current?.(String(id));
+      });
+      map.on("mouseenter", "community-points", () => (map.getCanvas().style.cursor = "pointer"));
+      map.on("mouseleave", "community-points", () => (map.getCanvas().style.cursor = ""));
+
       map.on("click", "event-symbols", (ev: maplibregl.MapLayerMouseEvent) => {
+        // A community dot drawn on top of this symbol takes the click.
+        if (map.queryRenderedFeatures(ev.point, { layers: ["community-points"] }).length > 0) return;
         const f = ev.features?.[0];
         if (f?.properties?.id) onSelect(String(f.properties.id));
       });
@@ -583,10 +652,40 @@ export default function TheaterMap({ events, selectedId, onSelect, forExport = f
     }
   }, [selectedId, events]);
 
+  // community layer: redraw on toggle / new data / selection; bring a picked report into view
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !readyRef.current) return;
+    const points = community ?? [];
+    (map.getSource("community") as maplibregl.GeoJSONSource | undefined)?.setData(
+      communityGeoJSON(points, selectedCommunityId),
+    );
+    const sel = selectedCommunityId ? points.find((p) => p.id === selectedCommunityId) : null;
+    if (sel) {
+      const p = map.project([sel.lon, sel.lat]);
+      const canvas = map.getCanvas();
+      const EDGE = 48;
+      if (p.x < EDGE || p.x > canvas.clientWidth - EDGE || p.y < EDGE || p.y > canvas.clientHeight - EDGE) {
+        map.easeTo({ center: [sel.lon, sel.lat], duration: 500 });
+      }
+    }
+  }, [community, selectedCommunityId]);
+
   // Inline style: the renderer's stylesheet sets `position: relative` on the
   // container class, which beats a Tailwind `absolute` in the cascade and
   // collapses the div to zero height. Inline wins over both.
   return <div ref={container} style={{ position: "absolute", inset: 0 }} />;
+}
+
+function communityGeoJSON(points: CommunityPoint[], selected: string | null): GeoJSON.FeatureCollection {
+  return {
+    type: "FeatureCollection",
+    features: points.map((c) => ({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [c.lon, c.lat] },
+      properties: { id: c.id, title: c.title, place: c.placeName, precision: c.precision, sel: c.id === selected },
+    })),
+  };
 }
 
 function referencedFor(refEvents: NumberedEvent[]): LineFeature[] {

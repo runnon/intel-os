@@ -85,5 +85,6 @@ Env:
 | UX-5 cluster / symbol degrade | `web/components/TheaterMap.tsx` |
 | GEO-3/4 2525-informed framing | `packages/core/src/sidc.ts`, `web/lib/symbols.ts` |
 | MARK-2/3/4 markings + public-source guard | layout banners, `assertPublicSource` |
+| Community reports kept out of issues; public source + gazetteer-only placement | `supabase/migrations/20261030220000_community_reports.sql`, `web/lib/community.ts` |
 
 Export (the differentiator — vector ANSI-D/tabloid sheet) is Phase 3 and not built yet.

@@ -1,5 +1,38 @@
 # Decision Log
 
+## 2026-10-30 — Community reports layer: user submissions beside, never inside, the picture
+
+**Decision (Xavier):** let signed-in people send in events they have seen in public
+reporting, so everyone can see what the open-source community is tracking. Submissions
+appear immediately on their own layer and are never mixed into situation updates.
+
+- **Separate by construction:** `community_reports` is a new table the worker never
+  reads. Issues, events and their snapshots are untouched (AUTO-5, AUTO-10). On a
+  theater page the layer is OFF by default and turns on with the COMMUNITY toggle or
+  tab. When on, it shows small purple dots, outside the MIL-STD affiliation palette,
+  under a standing "UNVERIFIED · COMMUNITY REPORTS" banner and a legend row.
+- **MARK-4 for people:** every report needs a public http(s) source link. The web route
+  runs `assertPublicSource` plus a stricter check (link-local, `.internal`/`.corp`,
+  single-label hosts, credentials in the URL). The table repeats the core of that check
+  as a CHECK constraint, because a signed-in user can call PostgREST directly with their
+  own JWT. Links render `rel="noopener noreferrer nofollow ugc"`.
+- **DATA-2, no planted coordinates:** the table stores no lat/lon. The site resolves
+  `place_name` against the theater's curated gazetteer when it reads the row (the same
+  `geolocate` the pipeline uses). A place that does not resolve is listed as "NOT ON
+  MAP"; it is never guessed. A submitter cannot put a dot anywhere the gazetteer would not.
+- **Privacy:** reads go through `public_community_reports(aor)` (security definer,
+  last 30 days, newest first, at most 300). It never returns `user_id`; it returns only
+  `mine` and `flagged` for the viewer. Raw-table access is limited to your own rows.
+- **Abuse limits (insert trigger):** 5 reports an hour, 20 a day, no resubmitting the
+  same link within 7 days, `occurred_at` from 30 days ago to 1 hour ahead.
+- **Moderation:** any signed-in user can flag a report once (not their own). Three
+  distinct flags hide it. Owners can delete their own. The operator can set
+  `hidden = true` from the Supabase dashboard.
+- **Verified:** the migration was exercised in PGlite under Supabase-style default
+  privileges. Checked: anon cannot read or write the table, user_id cannot be spoofed,
+  `hidden` cannot be set on insert, the rate limit, duplicate and source checks fire,
+  no cross-user update or delete, the RPC omits user_id, and three flags hide a report.
+
 ## 2026-10-30 — X distribution thread; the corroboration gate survives a reload
 
 **Decision (Xavier):** post the open-source picture to X automatically and send readers
