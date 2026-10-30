@@ -1,5 +1,36 @@
 # Decision Log
 
+## 2026-10-30 — X distribution thread; the corroboration gate survives a reload
+
+**Decision (Xavier):** post the open-source picture to X automatically and send readers
+to intel-os.org. After each 12-hour cycle the worker composes ONE thread from the issues
+that cycle published (`worker/src/xpost.ts`): a lead with the count, the commands, the
+top story and the only link, then one reply per highlight (Zulu DTG, place, outlets,
+location/actor confidence, a "US forces involved" line when flagged).
+
+- **AUTO-5:** the thread is templated from extracted fields only. No model writes it,
+  and the extracted `us_impact` prose is deliberately NOT posted (it reads as assessment
+  and does not clip cleanly); only the US-forces flag is.
+- **MARK-2/3:** the lead carries the open-sources / not-official line; tests forbid any
+  classification-style marking in a post.
+- **Eligibility:** corroborated, reported in the last 24 h, not posted before (dedupe on
+  `x_posts.post_id`), at most five, one per command first, one story once across
+  commands (shared source URL or title overlap >= 0.5).
+- **Cost:** X bills ~$0.015 per post and ~$0.20 per post with a link, so only the lead
+  links: about $0.28 a cycle, ~$17/month at two cycles a day.
+- **Opt-in:** live only with `X_POST_ENABLED=1` and `X_API_KEY`/`X_API_SECRET`/
+  `X_ACCESS_TOKEN`/`X_ACCESS_TOKEN_SECRET` on the Railway worker. Otherwise each cycle
+  records its draft in `x_posts` with `dry_run = true` for review. X's automation rules
+  require the account's "Automated" label and a bio disclosure before going live. A
+  posting failure is logged and never fails the ingest run (AUTO-9 is about ingest).
+- **Gate fix found on the way:** `event_sources` has no `social` column, so a stored
+  social-only lead came back unflagged on the next cycle and passed `isCorroborated` —
+  19 social-only events were in the six latest issues. `isSocialSource` now also
+  recognises a social source by host (t.me, bsky.app, mastodon.social) or by the outlet
+  name the social layer gives it. Published issues are untouched (AUTO-10); the next
+  cycle's issues exclude those leads. Re-entry: add a `social` column to
+  `event_sources` and persist the flag, then the host/outlet fallback can go.
+
 ## 2026-10-01 — Fully free: paywall removed
 
 **Decision (Xavier):** "remove any paywall or anything like that. make it free." Every

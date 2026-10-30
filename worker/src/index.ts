@@ -3,6 +3,7 @@ import { configuredAors, fetchGlobalPool, selectForAor } from './feeds';
 import { makeClaudeExtractor } from './extract';
 import { makeSupabaseStore } from './store';
 import { runIngestOnce } from './pipeline';
+import { runXPost } from './xpost';
 
 // Railway cron entrypoint: one ingest cycle across every configured AOR, then
 // exit. Exit code 1 if any AOR failed so the platform surfaces it (AUTO-9
@@ -23,6 +24,7 @@ const aors = configuredAors(process.env.AORS ?? process.env.AOR);
 const store = makeSupabaseStore(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const extract = makeClaudeExtractor();
 
+const cycleStart = new Date();
 const pool = await fetchGlobalPool();
 console.log(JSON.stringify({ pool: pool.length, aors }));
 
@@ -36,6 +38,14 @@ for (const aor of aors) {
   });
   console.log(JSON.stringify({ aor, selected: selected.length, ...result }));
   if (!result.ok) anyFailed = true;
+}
+
+// Distribution: one X thread from the issues this cycle published. Dry-run unless
+// X_POST_ENABLED=1; a posting failure is logged and never fails the ingest run.
+try {
+  console.log(JSON.stringify({ x: await runXPost(store, cycleStart) }));
+} catch (e) {
+  console.warn(`[x] failed: ${e instanceof Error ? e.message : e}`);
 }
 
 process.exit(anyFailed ? 1 : 0);
