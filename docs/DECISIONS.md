@@ -1,5 +1,44 @@
 # Decision Log
 
+## 2026-10-30 — Audit fixes: no assessment in "US impact"; failures and stale output are recorded and alarmed
+
+An audit of the live system found judgement leaking into the unattended path, plus
+failures that left no trace. Fixed here:
+
+- **AUTO-5, "US impact" line:** of 616 stored `us_impact` lines, about two-thirds were
+  assessment rather than reported effect: "could affect…", "a critical chokepoint",
+  ", strengthening interoperability", "raises the threat level".
+  - The extractor schema now asks for a *reported, direct* effect only.
+  - `factualUsImpact` (packages/core/src/usimpact.ts) is deterministic and uses no model.
+    It trims a trailing evaluative clause, then withholds the whole line if any
+    assessment marker remains. It keeps about 200 of 616 stored lines.
+  - It applies at extraction and on every render: event card, report sheet, and the
+    analyst context. Issues published before this change (immutable, AUTO-10) therefore
+    also display clean. Withholding a factual line is the accepted failure mode.
+- **Silent feed failures:**
+  - `fetchGlobalPool` now returns a `SourceHealth` (ok and failed counts, ratio, up to 40
+    failure lines). It logs `DEGRADED` at 50% or more failed.
+  - Every `ingest_runs` row stores it in `source_health`.
+- **Missed cycles left no record:**
+  - Extractor setup and the shared fetch were outside any recorder. A cycle that died
+    there (10-22, a 36-hour gap) wrote nothing.
+  - That path now records a failed run per AOR and exits 1 (AUTO-9).
+  - Each cycle's rows share a `cycle_id`.
+- **Stale code in production:** the worker deployed only by hand and ran 09-17 code
+  until 10-30.
+  - `.github/workflows/deploy-worker.yml` runs the core and worker tests and typecheck,
+    stamps `worker/VERSION`, then runs `railway up` on every main push that touches
+    worker code. It needs the `RAILWAY_TOKEN` secret.
+  - Each run records `code_version`: the Railway git SHA, else VERSION, else `unknown`.
+    `unknown` means someone deployed by hand.
+- **Alarm:**
+  - `public_issue_freshness()` returns, per command, the latest issue time and the last
+    run's time and ok flag. It exposes no error text.
+  - `/api/health` returns 503 if any command's issue is more than 14 h old (the cron
+    runs every 12 h) or its last run failed.
+  - `.github/workflows/staleness.yml` probes it hourly. A failed scheduled run emails
+    the repo's notification recipients. No new service or secret is needed.
+
 ## 2026-10-30 — GeoNames-backed geolocation; region anchors are not "the same place"
 
 **Decision (Xavier, "make this product as good as possible"):** resolve places the curated

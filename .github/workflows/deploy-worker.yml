@@ -1,0 +1,60 @@
+name: Deploy worker
+
+# Deploys the ingest worker to Railway whenever code it runs changes on main. Before
+# this, the worker deployed only by hand and ran 2026-09-17 code until 10-30 while main
+# moved on. Tests and the typecheck must pass first. The commit SHA is written to
+# worker/VERSION so each ingest_runs row records which code produced it.
+#
+# Required repo secret (Settings → Secrets and variables → Actions):
+#   RAILWAY_TOKEN — a Railway *project* token for project intel-os, environment
+#                   production (Railway → project → Settings → Tokens).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "worker/**"
+      - "packages/core/**"
+      - "package.json"
+      - "package-lock.json"
+      - "railway.json"
+      - ".github/workflows/deploy-worker.yml"
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-worker
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Test core + worker
+        run: |
+          npm test -w packages/core
+          npm test -w worker
+          npm run typecheck -w packages/core
+          npm run typecheck -w worker
+
+      - name: Stamp version
+        run: git rev-parse --short=12 HEAD > worker/VERSION
+
+      - name: Deploy to Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "::error::RAILWAY_TOKEN secret is not set; the worker was NOT deployed."
+            exit 1
+          fi
+          npx --yes @railway/cli@4.31.0 up --service worker --ci
