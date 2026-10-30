@@ -8,7 +8,9 @@ import {
   enforceDraftMarkings,
   invalidMessagesError,
   MODEL_TIMEOUT_MS,
+  enforceExplainMarking,
   parseChatMessages,
+  parseMode,
 } from "@/lib/analyst-policy";
 
 export const runtime = "nodejs";
@@ -53,6 +55,25 @@ provided in this conversation. Rules, non-negotiable:
   declassified document.
 Format in clean GitHub-flavored markdown (headings, bold, bullet lists, links).`;
 
+// Ask panel on a theater page: the same facts-only discipline, written for a general
+// reader who wants to know what is going on — short, plain, and linked to the map.
+const EXPLAIN_SYSTEM = `You answer questions from the public about what is happening in one
+military theater, inside Theater Picture, an open-source situational awareness site. You
+see only the PUBLISHED situation-update data provided in this conversation.
+Rules, non-negotiable:
+- Plain language for a general reader: no jargon or acronyms without a short gloss. Keep
+  answers short — 2 to 5 short paragraphs or a brief bullet list — unless asked for more.
+- Reported facts only: say what was reported, by whom, where and when. Do not predict,
+  assess intent, speculate about what will happen, or give opinions. If asked for any of
+  that, say this site reports facts only and offer what was actually reported instead.
+- Keep each event's stated attribution: never turn "unknown" into a named actor. Say
+  plainly when something rests on a single source and is not confirmed.
+- Cite every event you mention as a markdown link to it on the map, using its serial and
+  the link given in the data, e.g. [#214](/t/centcom?ev=…). Only use links present in the data.
+- Say how current the data is in plain words ("as of 30 Oct 2026, 12:01 UTC"), and say so
+  when the data does not cover what was asked rather than guessing.
+- Never add classification markings of any kind.`;
+
 export async function POST(req: Request) {
   const startedAt = Date.now();
 
@@ -73,6 +94,8 @@ export async function POST(req: Request) {
   }
 
   const messages = parseChatMessages(body);
+  const { mode, aor } = parseMode(body);
+  const explain = mode === "explain";
   if (!messages) {
     return NextResponse.json(
       { error: invalidMessagesError() },
@@ -114,7 +137,10 @@ export async function POST(req: Request) {
   }
 
   const seen = new Set<string>();
-  const latest = (issues ?? []).filter((i) => (seen.has(i.aor) ? false : (seen.add(i.aor), true)));
+  const latest = (issues ?? [])
+    .filter((i) => (seen.has(i.aor) ? false : (seen.add(i.aor), true)))
+    // The Ask panel answers about the theater on screen only: smaller, faster, cheaper.
+    .filter((i) => !explain || !aor || i.aor === aor);
 
   const context = latest
     .map((i) => {
@@ -129,7 +155,8 @@ export async function POST(req: Request) {
             .slice(0, 3)
             .map((s) => `${s.outlet ?? "source"} <${s.url ?? ""}>`)
             .join("; ");
-          return `[${idx + 1}] ${e.occurredAt} | ${e.placeName}, ${e.country ?? "?"} | ${e.category} | affiliation:${e.affiliation} | conf:${e.confOrigin}/${e.confActor} | usForces:${e.usForcesFlag} | ${e.title} — ${e.summary}${e.usImpact ? ` | US impact: ${e.usImpact}` : ""} | sources(${src.length}): ${srcList || "none"}`;
+          const link = explain ? ` | link: /t/${i.aor.toLowerCase()}?ev=${String(e.id ?? "")}` : "";
+          return `[${idx + 1}]${link} | ${e.occurredAt} | ${e.placeName}, ${e.country ?? "?"} | ${e.category} | affiliation:${e.affiliation} | conf:${e.confOrigin}/${e.confActor} | usForces:${e.usForcesFlag} | ${e.title} — ${e.summary}${e.usImpact ? ` | US impact: ${e.usImpact}` : ""} | sources(${src.length}): ${srcList || "none"}`;
         })
         .join("\n");
       return `=== ${i.aor} · ${i.serial} · window ${i.window_start} → cut-off ${i.info_cutoff} ===\n${rows || "(no events in window)"}\nSource summary: ${i.source_summary?.statement ?? "n/a"}`;
@@ -179,14 +206,19 @@ export async function POST(req: Request) {
   try {
     response = await anthropic.messages.create({
       model,
-      max_tokens: 4000,
-      system: SYSTEM,
+      max_tokens: explain ? 1200 : 4000,
+      system: explain ? EXPLAIN_SYSTEM : SYSTEM,
       messages: [
         {
           role: "user" as const,
           content: `Published data available (AORs with coverage: ${covered}; all other AORs have NO coverage — say so if asked about them):\n\n${context}`,
         },
-        { role: "assistant" as const, content: "Understood. I have the published issue data and will draft facts-only report text on request, citing event numbers and issue serials." },
+        {
+          role: "assistant" as const,
+          content: explain
+            ? "Understood. I'll answer in plain language from this published data only, facts only, linking each event I mention."
+            : "Understood. I have the published issue data and will draft facts-only report text on request, citing event numbers and issue serials.",
+        },
         ...messages,
       ],
     }, {
@@ -226,7 +258,7 @@ export async function POST(req: Request) {
   if (!text.trim()) {
     return NextResponse.json({ error: "The model returned an empty draft. Try the request again." }, { status: 502 });
   }
-  const markedText = enforceDraftMarkings(text);
+  const markedText = explain ? enforceExplainMarking(text) : enforceDraftMarkings(text);
 
   console.info("[analyst] request-complete", {
     elapsedMs: Date.now() - startedAt,

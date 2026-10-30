@@ -8,6 +8,8 @@ import type { IssueRow } from "@/lib/db";
 import { applyView, decodeView, encodeView, type ViewState } from "@/lib/urlState";
 import TheaterMap, { type NumberedEvent } from "./TheaterMap";
 import EventCallout from "./EventDetail";
+import AskPanel from "./AskPanel";
+import AccountLink from "./AccountLink";
 
 const WINDOW_PRESETS: { label: string; hours: number | null }[] = [
   { label: "72H", hours: 72 },
@@ -48,6 +50,8 @@ export default function TheaterView({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [view, setView] = useState<ViewState>(() => decodeView(new URLSearchParams(searchParams.toString())));
+  // Sidebar tab; ?tab=ask survives the sign-in round trip.
+  const [tab, setTab] = useState<"index" | "ask">(() => (searchParams.get("tab") === "ask" ? "ask" : "index"));
   const viewRef = useRef(view);
   viewRef.current = view;
 
@@ -194,6 +198,7 @@ export default function TheaterView({
             GENERATE REPORT
           </a>
         )}
+        <AccountLink />
       </header>
 
       {/* One thin control bar: time window · filter menu · count */}
@@ -380,9 +385,27 @@ export default function TheaterView({
 
         {/* Event index — one line each, calm */}
         <aside className="md:w-[340px] md:border-l border-t md:border-t-0 border-[#c9c2ac] bg-[#f5f2ea] flex flex-col min-h-0 max-h-[40dvh] md:max-h-none">
-          <div className="px-4 py-2 border-b border-[#e3ddcc] font-mono text-[9px] tracking-[0.2em] text-[#918c7d] shrink-0">
-            EVENT INDEX · NEWEST FIRST
+          <div role="tablist" className="flex border-b border-[#e3ddcc] font-mono text-[9px] tracking-[0.2em] shrink-0">
+            {([
+              ["index", "EVENT INDEX · NEWEST FIRST"],
+              ...(allTheaters ? [] : [["ask", "ASK AI"]]),
+            ] as ["index" | "ask", string][]).map(([key, label]) => (
+              <button
+                key={key}
+                role="tab"
+                aria-selected={tab === key}
+                onClick={() => setTab(key)}
+                className={`px-4 py-2 ${key === "ask" ? "ml-auto border-l border-[#e3ddcc]" : ""} ${
+                  tab === key ? "text-[#171712] bg-[#efeadb]" : "text-[#918c7d] hover:text-[#171712]"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
+          {tab === "ask" && !allTheaters ? (
+            <AskPanel aor={issue.aor} cutoffIso={issue.info_cutoff} onSelectEvent={(id) => updateView({ selectedEvent: id })} />
+          ) : (
           <div ref={eventListRef} className="overflow-y-auto flex-1">
             {filtered.length === 0 && (
               <p className="p-4 text-xs font-mono text-[#6b675c]">No events match the current filters.</p>
@@ -422,6 +445,7 @@ export default function TheaterView({
               );
             })}
           </div>
+          )}
         </aside>
       </div>
 

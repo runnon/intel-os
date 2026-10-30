@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Aor } from "@intel-os/core";
 import { latestIssues, type IssueRow } from "@/lib/db";
+import AccountLink from "@/components/AccountLink";
 
 export const dynamic = "force-dynamic";
 
@@ -80,15 +81,18 @@ export default async function Home() {
           <p className="mb-3"><span className="tag">Open-Source Theater Awareness</span></p>
           <div className="flex items-end justify-between flex-wrap gap-3">
             <h1 className="headline text-5xl text-[#171712]">Theater Picture</h1>
-            <a href="/analyst" className="font-mono text-xs px-3 py-1.5 rounded-md border border-[#171712] text-[#171712] hover:bg-[#eae4d2]">
-              ANALYST DRAFTING →
-            </a>
+            <div className="flex items-center gap-3">
+              <a href="/analyst" className="font-mono text-xs px-3 py-1.5 rounded-md border border-[#171712] text-[#171712] hover:bg-[#eae4d2]">
+                ANALYST DRAFTING →
+              </a>
+              <AccountLink />
+            </div>
           </div>
           <p className="text-sm leading-relaxed text-[#6b675c] mt-2 max-w-2xl">
             Pick a combatant command for a live, filterable geospatial picture of that theater,
             built entirely from publicly available information on an unattended 12-hour cycle.
-            Everything is free: every time window, the full issue archive, and reports. Drafting
-            needs only a free account.
+            Everything is free: every time window, the full issue archive, and reports. A free
+            account adds plain-language AI answers on every theater and report drafting.
             Situation updates carry reported facts only — an assessment layer publishes solely over
             a named analyst&apos;s signature.
           </p>
