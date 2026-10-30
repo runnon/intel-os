@@ -1,5 +1,6 @@
 "use client";
 
+import { factualUsImpact } from "@intel-os/core";
 import type { NumberedEvent } from "./TheaterMap";
 import { zulu } from "./TheaterView";
 
@@ -50,10 +51,11 @@ export default function EventCallout({
         <p className="font-sans text-[13px] font-medium leading-snug mt-2">{event.title}</p>
         <p className="text-xs text-[#3a382e] mt-1.5 leading-relaxed">{event.summary}</p>
 
-        {event.usImpact && (
+        {/* AUTO-5: only a reported, direct effect; assessment-shaped lines are withheld */}
+        {factualUsImpact(event.usImpact) && (
           <div className="mt-2.5 border-t border-[#dcd6c4] pt-2">
             <span className="font-mono text-[9px] tracking-widest text-[#a02c2c]">US IMPACT </span>
-            <span className="text-[11px] leading-snug">{event.usImpact}</span>
+            <span className="text-[11px] leading-snug">{factualUsImpact(event.usImpact)}</span>
           </div>
         )}
 

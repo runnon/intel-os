@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { IDENTITY_COLOR_LIGHT } from "@intel-os/core";
+import { IDENTITY_COLOR_LIGHT, factualUsImpact } from "@intel-os/core";
 import type { IssueRow } from "@/lib/db";
 import { applyView, decodeView } from "@/lib/urlState";
 import TheaterMap, { type NumberedEvent } from "./TheaterMap";
@@ -71,10 +71,11 @@ function EventCard({ e }: { e: NumberedEvent }) {
         {(e.country ?? "—").toUpperCase()} · {zulu(e.occurredAt)} · {e.category.toUpperCase()} · {e.affiliation.toUpperCase()}
       </p>
       <p className="text-[9px] leading-snug mt-1">{e.summary}</p>
-      {e.usImpact && (
+      {/* AUTO-5: only a reported, direct effect; assessment-shaped lines are withheld */}
+      {factualUsImpact(e.usImpact) && (
         <div className="mt-1 pt-1 border-t border-black/10">
           <span className="font-mono text-[7px] tracking-widest text-[#8a2f2f]">US IMPACT </span>
-          <span className="text-[8px] leading-snug">{e.usImpact}</span>
+          <span className="text-[8px] leading-snug">{factualUsImpact(e.usImpact)}</span>
         </div>
       )}
     </div>

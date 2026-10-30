@@ -125,4 +125,8 @@ Vercel reserves AWS_* env names, so the web side uses BEDROCK_AWS_*.
   re-entry path if it amends the spec).
 - Update README's conformance map when requirement coverage changes.
 - Deploys: web = `vercel deploy --prod --yes` (project intel-os, rootDirectory=web);
-  worker = `railway up` (project intel-os, cron 0 */12 * * *).
+  worker = automatic on merge to main via `.github/workflows/deploy-worker.yml`
+  (`railway up`, project intel-os, cron 0 */12 * * *; needs the RAILWAY_TOKEN secret).
+  Each `ingest_runs` row records `code_version`; `unknown` means a hand deploy.
+- Health: `/api/health` is 503 when any command is >14 h stale or its last run failed;
+  `.github/workflows/staleness.yml` checks it hourly.
