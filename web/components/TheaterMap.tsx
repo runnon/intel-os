@@ -62,6 +62,9 @@ interface Props {
   events: NumberedEvent[]; // pre-filtered, all with lat/lon
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  // Several events at one exact position collapse into a single marker on the
+  // interactive map; clicking it hands every id there (newest first) to this.
+  onSelectStack?: (ids: string[]) => void;
   // Report/export map: keep the WebGL frame so window.print() captures the map
   // (a default MapLibre canvas prints blank) and re-fit/redraw around printing.
   forExport?: boolean;
@@ -119,7 +122,9 @@ function toGeoJSON(events: NumberedEvent[]): GeoJSON.FeatureCollection {
   };
 }
 
-export default function TheaterMap({ events, selectedId, onSelect, forExport = false, referenceEvents, allTheaters = false }: Props) {
+export default function TheaterMap({ events, selectedId, onSelect, onSelectStack, forExport = false, referenceEvents, allTheaters = false }: Props) {
+  const onSelectStackRef = useRef(onSelectStack);
+  onSelectStackRef.current = onSelectStack;
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const readyRef = useRef(false);
@@ -416,9 +421,41 @@ export default function TheaterMap({ events, selectedId, onSelect, forExport = f
         },
       });
 
+      // Count badge on a marker that stands for several events at one position.
+      map.addLayer({
+        id: "stack-badge-bg",
+        type: "circle",
+        source: "events",
+        filter: [">", ["get", "count"], 1],
+        paint: {
+          "circle-radius": 8,
+          "circle-color": "#171712",
+          "circle-stroke-color": "#f5f2ea",
+          "circle-stroke-width": 1.5,
+          "circle-translate": [14, -14],
+        },
+      });
+      map.addLayer({
+        id: "stack-badge-text",
+        type: "symbol",
+        source: "events",
+        filter: [">", ["get", "count"], 1],
+        layout: {
+          "text-field": ["to-string", ["get", "count"]],
+          "text-size": 9,
+          "text-allow-overlap": true,
+          "text-ignore-placement": true,
+          "text-font": LABEL_FONT,
+          "text-offset": [1.55, -1.55],
+        },
+        paint: { "text-color": "#f5f2ea" },
+      });
+
       map.on("click", "event-symbols", (ev: maplibregl.MapLayerMouseEvent) => {
         const f = ev.features?.[0];
-        if (f?.properties?.id) onSelect(String(f.properties.id));
+        const stack = f?.properties?.stack ? String(f.properties.stack).split(",") : [];
+        if (stack.length > 1 && onSelectStackRef.current) onSelectStackRef.current(stack);
+        else if (f?.properties?.id) onSelect(String(f.properties.id));
       });
       map.on("mouseenter", "event-symbols", () => (map.getCanvas().style.cursor = "pointer"));
       map.on("mouseleave", "event-symbols", () => (map.getCanvas().style.cursor = ""));
@@ -765,7 +802,21 @@ function relayout(
   const selSrc = map.getSource("selected") as maplibregl.GeoJSONSource | undefined;
 
   const plotted = events.filter((e) => e.lat != null && e.lon != null);
-  const pts = plotted.map((e, i) => {
+  // Interactive map: events at one exact position become one marker (the newest
+  // stands in, carrying the rest) instead of a honeycomb of dozens of symbols.
+  // The printed sheet can't be clicked, so it keeps every symbol.
+  const stacks = new Map<string, NumberedEvent[]>();
+  for (const e of plotted) {
+    const key = withLeaders ? `${e.lat!.toFixed(4)},${e.lon!.toFixed(4)}` : e.id;
+    (stacks.get(key) ?? stacks.set(key, []).get(key)!).push(e);
+  }
+  const members = new Map<string, NumberedEvent[]>();
+  const shown = [...stacks.values()].map((group) => {
+    group.sort((a, b) => b.num - a.num);
+    members.set(group[0].id, group);
+    return group[0];
+  });
+  const pts = shown.map((e, i) => {
     const p = map.project([e.lon!, e.lat!]);
     return { e, tx: p.x, ty: p.y, x: p.x, y: p.y, i };
   });
@@ -804,11 +855,19 @@ function relayout(
   for (const pt of pts) {
     const disp = map.unproject([pt.x, pt.y]);
     const coord: [number, number] = [disp.lng, disp.lat];
-    layout.set(pt.e.id, coord);
+    const group = members.get(pt.e.id) ?? [pt.e];
+    for (const m of group) layout.set(m.id, coord);
     evFeatures.push({
       type: "Feature",
       geometry: { type: "Point", coordinates: coord },
-      properties: { id: pt.e.id, sidc: symbolFor(pt.e).sidc, num: String(pt.e.num), place: pt.e.placeName },
+      properties: {
+        id: pt.e.id,
+        sidc: symbolFor(pt.e).sidc,
+        num: String(pt.e.num),
+        place: pt.e.placeName,
+        count: group.length,
+        stack: group.map((m) => m.id).join(","),
+      },
     });
     if (withLeaders && Math.hypot(pt.x - pt.tx, pt.y - pt.ty) > 4) {
       const t = map.unproject([pt.tx, pt.ty]);
