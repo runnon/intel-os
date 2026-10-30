@@ -6,6 +6,7 @@ import type { Affiliation, Aor, EventCategory } from "@intel-os/core";
 import { AORS, BLOCS, IDENTITY_COLOR_LIGHT } from "@intel-os/core";
 import type { IssueRow } from "@/lib/db";
 import { applyView, decodeView, encodeView, type ViewState } from "@/lib/urlState";
+import { ageLabel, plainUtc } from "@/lib/age";
 import TheaterMap, { type NumberedEvent } from "./TheaterMap";
 import EventCallout from "./EventDetail";
 
@@ -65,6 +66,15 @@ export default function TheaterView({
   useEffect(() => {
     setView(decodeView(new URLSearchParams(searchParams.toString())));
   }, [searchParams]);
+
+  // Cut-off age is clock-dependent, so it renders only after mount (no hydration
+  // mismatch) and ticks each minute.
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    setNow(Date.now());
+    const t = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
 
   // Chronological serials over the whole issue snapshot (oldest = 1) — stable
   // regardless of active filters; proof-build numbering convention.
@@ -183,8 +193,9 @@ export default function TheaterView({
             </a>
           ))}
         </nav>
-        <span className="font-mono text-[11px] text-[#8a6100] ml-auto">
+        <span className="font-mono text-[11px] text-[#8a6100] ml-auto" title={plainUtc(issue.info_cutoff)}>
           INFO CUT-OFF {zulu(issue.info_cutoff)}
+          {now !== null && <span className="text-[#6b675c]"> · {ageLabel(issue.info_cutoff, now)}</span>}
         </span>
         {!allTheaters && (
           <a
