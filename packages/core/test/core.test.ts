@@ -16,7 +16,9 @@ import {
   FRAME,
   GEO_CONFIDENCE_THRESHOLD,
   geolocate,
+  isCorroborated,
   isDuplicate,
+  isSocialSource,
   makeSerial,
   mergeEvents,
   titleSimilarity,
@@ -531,5 +533,22 @@ describe('linear infrastructure (referencedLines)', () => {
     const malacca = INFRASTRUCTURE_LINES.INDOPACOM.find((line) => line.name.includes('Malacca'));
     expect(malacca?.basis).toBe('routed');
     expect(malacca?.coordinates.some(([lng, lat]) => lng >= 103.5 && lng <= 104.8 && lat >= 1 && lat <= 1.8)).toBe(true);
+  });
+});
+
+describe('social sources and the corroboration gate', () => {
+  it('recognises a social source by flag, host or outlet name', () => {
+    expect(isSocialSource({ url: 'https://news.example/a', outlet: 'Reuters', social: true })).toBe(true);
+    expect(isSocialSource({ url: 'https://t.me/chan/1', outlet: 'chan' })).toBe(true);
+    expect(isSocialSource({ url: 'https://bsky.app/profile/x/post/1', outlet: 'x' })).toBe(true);
+    expect(isSocialSource({ url: 'https://mastodon.social/@x/1', outlet: 'x' })).toBe(true);
+    expect(isSocialSource({ url: 'https://example.org/linked-story', outlet: 'Mastodon #OSINT' })).toBe(true);
+    expect(isSocialSource({ url: 'https://www.telegraph.co.uk/x', outlet: 'The Telegraph' })).toBe(false);
+    expect(isSocialSource({ url: 'https://www.reuters.com/x', outlet: 'Reuters' })).toBe(false);
+  });
+
+  it('needs one non-social source to corroborate', () => {
+    expect(isCorroborated([{ url: 'https://t.me/c/1', outlet: 'Telegram @c' }])).toBe(false);
+    expect(isCorroborated([{ url: 'https://t.me/c/1', outlet: 'Telegram @c' }, { url: 'https://bbc.com/x', outlet: 'BBC' }])).toBe(true);
   });
 });

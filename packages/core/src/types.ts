@@ -37,10 +37,21 @@ export interface SourceRef {
   social?: boolean;
 }
 
+// event_sources stores no `social` column, so the flag is lost once an event is
+// reloaded from the database; a social source is also recognised by its host or
+// by the outlet name the social layer gives it (worker/src/social.ts).
+const SOCIAL_HOST = /^https?:\/\/([^/]*\.)?(t\.me|bsky\.app|mastodon\.social)\//i;
+const SOCIAL_OUTLET = /^(Mastodon|Telegram|Bluesky)\b/;
+
+/** True for a social-media source (an early-warning lead, never corroboration). */
+export function isSocialSource(s: SourceRef): boolean {
+  return Boolean(s.social) || SOCIAL_HOST.test(s.url) || SOCIAL_OUTLET.test(s.outlet);
+}
+
 /** True once an event has at least one non-social (news/official) source — the
  *  corroboration gate for social-media leads. Social-only events never publish. */
 export function isCorroborated(sources: SourceRef[]): boolean {
-  return sources.some((s) => !s.social);
+  return sources.some((s) => !isSocialSource(s));
 }
 
 export interface Revision {
