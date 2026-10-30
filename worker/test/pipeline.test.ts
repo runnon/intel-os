@@ -247,6 +247,7 @@ describe('corroboration gate (social-only leads held)', () => {
       fetchFeeds: async () => articles,
       extract: async () => [socialOnly, corroborated],
       store,
+      now: () => new Date('2026-09-15T12:00:00Z'),
     });
     expect(res.ok).toBe(true);
     // both are STORED (so the lead can be corroborated in a later cycle)
@@ -270,5 +271,24 @@ describe('corroboration gate (social-only leads held)', () => {
     const res = await runIngestOnce('CENTCOM', { fetchFeeds: async () => articles, extract: async () => [], store });
     expect(res.ok).toBe(true);
     expect(state.issues[0].snapshot.map((e) => e.id)).not.toContain('soc');
+  });
+});
+
+describe('issue window (no stale or future events published as new)', () => {
+  it('drops candidates dated before the window or in the future', async () => {
+    const { store, state } = makeFakeStore();
+    const now = new Date('2026-09-15T12:00:00Z');
+    const res = await runIngestOnce('CENTCOM', {
+      fetchFeeds: async () => articles,
+      extract: async () => [
+        fakeEvent({ id: 'current', title: 'Strike on a depot near Basra', placeName: 'Basra', occurredAt: '2026-09-15T06:00:00Z' }),
+        fakeEvent({ id: 'anniversary', title: 'One year since the fall of a city', placeName: 'Mosul', occurredAt: '2025-09-15T06:00:00Z' }),
+        fakeEvent({ id: 'scheduled', title: 'Election set for next month', placeName: 'Baghdad', occurredAt: '2026-10-20T00:00:00Z' }),
+      ],
+      store,
+      now: () => now,
+    });
+    expect(res.ok).toBe(true);
+    expect(state.events.map((e) => e.id)).toEqual(['current']);
   });
 });

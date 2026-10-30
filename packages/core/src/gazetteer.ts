@@ -174,6 +174,36 @@ export interface GeoResult {
   validated: boolean;
 }
 
+/**
+ * A place from an authoritative open gazetteer (GeoNames, CC-BY 4.0) — the
+ * "GeoNames-backed table" this module was designed to grow into. Coordinates come
+ * from the dataset, never from a model (DATA-2). The worker loads the table; core
+ * only consumes it through PlaceIndex so the web bundle never carries it.
+ */
+export interface PlaceCandidate {
+  name: string;
+  lat: number;
+  lon: number;
+  /** ISO 3166-1 alpha-2; null for international waters (seas, straits, gulfs). */
+  countryCode: string | null;
+  kind: 'settlement' | 'site' | 'island' | 'admin' | 'area' | 'water';
+  /** Population for settlements; a coarse rank otherwise. Used only to order candidates. */
+  importance: number;
+}
+
+export interface PlaceIndex {
+  /** Candidates whose name or alternate name normalizes (normPlace) to `key`. */
+  lookup(key: string): PlaceCandidate[];
+  /** ISO alpha-2 for a country name as the gazetteer spells it, or null. */
+  countryCode(country: string): string | null;
+}
+
+/** Confidence for an exact, unambiguous, country-consistent GeoNames hit: above the
+ * threshold and the country fallback, below a hand-curated exact match. */
+export const INDEX_MATCH_CONFIDENCE = 0.8;
+/** The same, for a hit that only places the event within an area (province, sea, "near X"). */
+export const INDEX_REGION_CONFIDENCE = 0.7;
+
 const norm = (s: string) =>
   s
     .toLowerCase()
@@ -182,6 +212,9 @@ const norm = (s: string) =>
     .replace(/[^a-z0-9 ]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+
+/** The one normalization shared by the curated lists and the GeoNames index. */
+export const normPlace = norm;
 
 // Partial (non-exact) matching must be on WHOLE-WORD boundaries and must never be
 // anchored by a tiny name/alias. A raw substring test let the 2-letter alias "us"
@@ -268,7 +301,52 @@ function countryCentroid(country: string, gaz: GazetteerEntry[]): GazetteerEntry
  * event reported with a country and no place. A place that DOES match but conflicts
  * with the country stays unplotted: contradictory evidence is not a fallback case.
  */
-export function geolocate(placeName: string, country?: string, gaz: GazetteerEntry[] = CENTCOM_GAZETTEER): GeoResult {
+/**
+ * Countries (ISO 3166-1 alpha-2) in each command's area of responsibility under the
+ * current Unified Command Plan (Israel → CENTCOM 2021; Greenland → NORTHCOM 2025).
+ * Bounds where the open gazetteer may resolve a place: land outside the theater
+ * stays withheld, as it always has.
+ */
+export const AOR_COUNTRIES: Record<Aor, readonly string[]> = {
+  CENTCOM: ['AF', 'BH', 'EG', 'IR', 'IQ', 'IL', 'JO', 'KZ', 'KW', 'KG', 'LB', 'OM', 'PK', 'PS', 'QA', 'SA', 'SY', 'TJ', 'TM', 'AE', 'UZ', 'YE'],
+  EUCOM: [
+    'AD', 'AL', 'AM', 'AT', 'AX', 'AZ', 'BA', 'BE', 'BG', 'BY', 'CH', 'CY', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FO', 'FR', 'GB', 'GE',
+    'GG', 'GI', 'GR', 'HR', 'HU', 'IE', 'IM', 'IS', 'IT', 'JE', 'LI', 'LT', 'LU', 'LV', 'MC', 'MD', 'ME', 'MK', 'MT', 'NL', 'NO', 'PL',
+    'PT', 'RO', 'RS', 'RU', 'SE', 'SI', 'SJ', 'SK', 'SM', 'TR', 'UA', 'VA', 'XK',
+  ],
+  AFRICOM: [
+    'AO', 'BF', 'BI', 'BJ', 'BW', 'CD', 'CF', 'CG', 'CI', 'CM', 'CV', 'DJ', 'DZ', 'EH', 'ER', 'ET', 'GA', 'GH', 'GM', 'GN', 'GQ', 'GW',
+    'KE', 'KM', 'LR', 'LS', 'LY', 'MA', 'MG', 'ML', 'MR', 'MU', 'MW', 'MZ', 'NA', 'NE', 'NG', 'RW', 'SC', 'SD', 'SH', 'SL', 'SN', 'SO',
+    'SS', 'ST', 'SZ', 'TD', 'TG', 'TN', 'TZ', 'UG', 'ZA', 'ZM', 'ZW',
+  ],
+  INDOPACOM: [
+    'AS', 'AU', 'BD', 'BN', 'BT', 'CK', 'CN', 'CX', 'FJ', 'FM', 'GU', 'HK', 'ID', 'IN', 'IO', 'JP', 'KH', 'KI', 'KP', 'KR', 'LA', 'LK',
+    'MH', 'MM', 'MN', 'MO', 'MP', 'MV', 'MY', 'NC', 'NF', 'NP', 'NR', 'NU', 'NZ', 'PF', 'PG', 'PH', 'PN', 'PW', 'SB', 'SG', 'TH', 'TK',
+    'TL', 'TO', 'TV', 'TW', 'UM', 'VN', 'VU', 'WF', 'WS',
+  ],
+  NORTHCOM: ['US', 'CA', 'MX', 'BS', 'PR', 'VI', 'GL', 'BM', 'PM', 'TC'],
+  SOUTHCOM: [
+    'AG', 'AI', 'AR', 'AW', 'BB', 'BL', 'BO', 'BQ', 'BR', 'BZ', 'CL', 'CO', 'CR', 'CU', 'CW', 'DM', 'DO', 'EC', 'FK', 'GD', 'GF', 'GP',
+    'GT', 'GY', 'HN', 'HT', 'JM', 'KN', 'KY', 'LC', 'MF', 'MQ', 'MS', 'NI', 'PA', 'PE', 'PY', 'SR', 'SV', 'SX', 'TT', 'UY', 'VC', 'VE', 'VG',
+  ],
+};
+
+export interface GeolocateOptions {
+  /** Open-gazetteer index consulted when the curated list has no exact match. */
+  index?: PlaceIndex;
+  /** The theater: bounds which countries the open gazetteer may resolve into. */
+  aor?: Aor;
+  /** First-level admin area (province / state / oblast / governorate) the reporting
+   * names; a region-precision fallback when the place itself doesn't resolve. */
+  admin1?: string;
+}
+
+export function geolocate(
+  placeName: string,
+  country?: string,
+  gaz: GazetteerEntry[] = CENTCOM_GAZETTEER,
+  opts: GeolocateOptions = {},
+): GeoResult {
   const q = norm(placeName);
   if (!q) return { lat: null, lon: null, precision: 'region', confidence: 0, matchedName: null, validated: false };
   const reported = country ? canonicalCountry(country) : null;
@@ -283,6 +361,21 @@ export function geolocate(placeName: string, country?: string, gaz: GazetteerEnt
     if (reported && canonicalCountry(entry.country) === reported) score += 0.1;
     else if (reported && entry.country !== 'International' && canonicalCountry(entry.country) !== reported) score -= 0.25;
     if (!best || score > best.score) best = { entry, score };
+  }
+
+  // Order of evidence: curated exact hit → GeoNames exact hit → curated partial hit
+  // → GeoNames admin1 → curated country centroid → withheld.
+  const curatedExact = best && best.score >= 0.85;
+  if (!curatedExact && opts.index) {
+    const hit = resolveFromIndex(placeName, country, gaz, opts.index, opts.aor);
+    if (hit) return hit;
+  }
+  if (best && !curatedExact && best.score >= GEO_CONFIDENCE_THRESHOLD) {
+    return fromCurated(best.entry, best.score);
+  }
+  if (!best && opts.index && opts.admin1) {
+    const hit = resolveFromIndex(opts.admin1, country, gaz, opts.index, opts.aor, true);
+    if (hit) return hit;
   }
 
   if (!best && country) {
@@ -302,14 +395,131 @@ export function geolocate(placeName: string, country?: string, gaz: GazetteerEnt
   if (!best || best.score < GEO_CONFIDENCE_THRESHOLD) {
     return { lat: null, lon: null, precision: 'region', confidence: best?.score ?? 0, matchedName: null, validated: false };
   }
+  return fromCurated(best.entry, best.score);
+}
+
+function fromCurated(entry: GazetteerEntry, score: number): GeoResult {
   return {
-    lat: best.entry.lat,
-    lon: best.entry.lon,
-    precision: precisionFor(best.entry.kind),
-    confidence: Math.min(best.score, 0.95),
-    matchedName: best.entry.name,
+    lat: entry.lat,
+    lon: entry.lon,
+    precision: precisionFor(entry.kind),
+    confidence: Math.min(score, 0.95),
+    matchedName: entry.name,
     validated: true,
   };
+}
+
+// ---------------------------------------------------------------------------
+// GeoNames-backed resolution
+// ---------------------------------------------------------------------------
+
+const DIRECTIONAL = /^(?:northern|southern|eastern|western|central|north|south|east|west|northeast|northwest|southeast|southwest|greater|outskirts of|near|around)\s+/;
+const ADMIN_WORDS = ['governorate', 'province', 'region', 'oblast', 'state', 'district', 'prefecture', 'county', 'municipality', 'raion', 'krai', 'wilaya', 'department', 'territory'];
+const ADMIN_SUFFIX = new RegExp(`\\s+(?:${[...ADMIN_WORDS, 'city'].join('|')})$`);
+// "20 km north of X", "outskirts of X", "near X" — but not "Port of X" (that names X's port).
+const OFFSET = /\b(?:(?:north|south|east|west|northeast|northwest|southeast|southwest)(?:ern)?|kms?|kilometres?|kilometers?|miles?|outskirts)\s+(?:of|from)\s+([a-z][a-z0-9 ]+)$|\b(?:near|outside)\s+([a-z][a-z0-9 ]+)$/;
+
+/**
+ * Name variants a report uses for one place, most literal first:
+ * "Red Sea coast, Yemen" → ["red sea coast yemen", "red sea coast", "yemen"];
+ * "20 km north of Kherson" → [..., "kherson"]; "Tigray region" → [..., "tigray"].
+ * Each variant past the first only ever coarsens the result (see `coarse`).
+ */
+interface Variant { key: string; coarse: boolean; admin: boolean }
+function variants(raw: string): Variant[] {
+  const out: Variant[] = [];
+  const add = (s: string, coarse: boolean, admin = false) => {
+    const k = norm(s);
+    if (k && !out.some((o) => o.key === k)) out.push({ key: k, coarse, admin });
+  };
+  add(raw, false);
+  for (const part of raw.split(/[,;/]|\s+-\s+/)) add(part, false);
+  const base = norm(raw.split(',')[0] ?? raw);
+  // "Kursk region" / "Donetsk Oblast" name the province, not its capital city.
+  if (ADMIN_SUFFIX.test(base)) add(base.replace(ADMIN_SUFFIX, ''), true, true);
+  const offset = base.match(OFFSET);
+  const near = offset?.[1] ?? offset?.[2];
+  if (near) add(near.replace(ADMIN_SUFFIX, ''), true);
+  if (DIRECTIONAL.test(base)) add(base.replace(DIRECTIONAL, '').replace(ADMIN_SUFFIX, ''), true);
+  return out;
+}
+
+/** Countries this theater covers: its UCP list plus any with a curated centroid. */
+function theaterCodes(gaz: GazetteerEntry[], index: PlaceIndex, aor?: Aor): Set<string> {
+  const codes = new Set<string>(aor ? AOR_COUNTRIES[aor] : []);
+  for (const e of gaz) {
+    if (e.kind !== 'region') continue;
+    const code = index.countryCode(e.country);
+    if (code) codes.add(code);
+  }
+  return codes;
+}
+
+// A name shared by a town and a facility resolves to the town: claiming point
+// precision needs the report to name the facility itself.
+const KIND_RANK: Record<PlaceCandidate['kind'], number> = {
+  settlement: 0, site: 1, island: 2, water: 3, admin: 4, area: 5,
+};
+
+function km(a: PlaceCandidate, b: PlaceCandidate): number {
+  const r = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * r;
+  const dLon = (b.lon - a.lon) * r;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLon / 2) ** 2;
+  return 12742 * Math.asin(Math.sqrt(h));
+}
+
+/**
+ * Exact-name lookup in the open gazetteer, constrained to the reported country (or,
+ * with none reported, to this theater's countries and international waters — one
+ * AOR's events never resolve against another theater's land). Returns null rather
+ * than guess when two plausible same-named places are far apart (AUTO-3).
+ */
+function resolveFromIndex(
+  raw: string,
+  country: string | undefined,
+  gaz: GazetteerEntry[],
+  index: PlaceIndex,
+  aor?: Aor,
+  adminOnly = false,
+): GeoResult | null {
+  const code = country ? index.countryCode(country) : null;
+  if (country && !code) return null; // a country we can't identify can't constrain the match
+  const theater = theaterCodes(gaz, index, aor);
+  // Land outside this theater never resolves, even when reported: it stays withheld.
+  const allowed = code ? new Set(theater.has(code) ? [code] : []) : theater;
+
+  for (const { key, coarse, admin } of variants(raw)) {
+    if (code && index.countryCode(key) === code) continue; // the country itself → centroid path
+    const areaOnly = adminOnly || admin;
+    // GeoNames spells provinces "Kursk Oblast" / "Donetsk Oblast": try each admin word.
+    const keys = admin ? [key, ...ADMIN_WORDS.map((w) => `${key} ${w}`)] : [key];
+    const cands = [...new Set(keys.flatMap((k) => index.lookup(k)))]
+      // Only seas and straits are placeless; a countryless "Middle East" is not a location.
+      .filter((c) => (c.countryCode === null ? !adminOnly && c.kind === 'water' : allowed.has(c.countryCode)))
+      .filter((c) => !areaOnly || c.kind === 'admin' || c.kind === 'area')
+      .sort((a, b) => KIND_RANK[a.kind] - KIND_RANK[b.kind] || b.importance - a.importance);
+    const top = cands[0];
+    if (!top) continue;
+    // Genuinely ambiguous → withheld: a same-named rival of comparable size, or a
+    // name shared by several places (Ukraine has dozens of Oleksandrivkas) unless
+    // the top hit is a major city, by its own name, that the bare name conventionally means.
+    const rivals = cands.filter((c) => c !== top && c.kind === top.kind && km(c, top) > 25);
+    if (rivals.some((c) => c.importance * 3 >= top.importance)) return null;
+    const isMajorCity = top.kind === 'settlement' && top.importance >= 250_000 && norm(top.name) === key;
+    if (rivals.length >= 2 && !isMajorCity) return null;
+
+    const regionLevel = coarse || adminOnly || top.kind === 'admin' || top.kind === 'area' || top.kind === 'water';
+    return {
+      lat: top.lat,
+      lon: top.lon,
+      precision: regionLevel ? 'region' : top.kind === 'settlement' ? 'settlement' : 'point',
+      confidence: regionLevel ? INDEX_REGION_CONFIDENCE : INDEX_MATCH_CONFIDENCE,
+      matchedName: top.name,
+      validated: true,
+    };
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------

@@ -33,6 +33,9 @@ function hoursApart(a: string, b: string): number {
 
 function samePlace(a: TheaterEvent, b: TheaterEvent): boolean {
   if (norm(a.placeName) === norm(b.placeName)) return true;
+  // Region-precision coordinates are shared anchors (a country centroid, a sea, a
+  // province) — two events sitting on one say nothing about being one incident.
+  if (a.precision === 'region' || b.precision === 'region') return false;
   if (a.lat != null && b.lat != null && a.lon != null && b.lon != null) {
     const km = Math.hypot(a.lat - b.lat, (a.lon - b.lon) * Math.cos((a.lat * Math.PI) / 180)) * 111;
     return km < 25;
@@ -50,6 +53,15 @@ export const DUPLICATE_SIMILARITY_ACROSS_CATEGORY = 0.6;
  *  the same base is several real events, and merging them destroys reporting. */
 export const DUPLICATE_HOURS = 36;
 
+/** Placed only at country level: the "same place" test carries almost no signal. */
+function countryLevel(e: TheaterEvent): boolean {
+  const p = norm(e.placeName);
+  return e.precision === 'region' && (p === '' || p === 'unspecified' || p === norm(e.country ?? ''));
+}
+
+/** Below this overlap, two country-level events citing one roundup article are two stories. */
+export const SHARED_SOURCE_MIN_SIMILARITY = 0.25;
+
 function sharesSource(a: TheaterEvent, b: TheaterEvent): boolean {
   const urls = new Set(a.sources.map((s) => s.url));
   return b.sources.some((s) => urls.has(s.url));
@@ -58,8 +70,10 @@ function sharesSource(a: TheaterEvent, b: TheaterEvent): boolean {
 /**
  * Two candidate events describe the same incident if place, time and content agree.
  *
- * Three ways to qualify, all requiring the same AOR and the same place:
- *  1. The two cite the SAME SOURCE URL. One article re-fetched on a later 12-hour
+ * Three ways to qualify, all requiring the same AOR and the same place (a shared
+ * region-level anchor such as a country centroid does not count as the same place):
+ *  1. The two cite the SAME SOURCE URL — and, when either is placed only at country
+ *     level, also overlap ≥ SHARED_SOURCE_MIN_SIMILARITY. One article re-fetched on a later 12-hour
  *     cycle and re-extracted with different wording, a different category, or an
  *     occurrence time that drifted from event day to publication day is the same
  *     report, not a second incident — this is how one strike showed up three times
@@ -72,9 +86,11 @@ function sharesSource(a: TheaterEvent, b: TheaterEvent): boolean {
 export function isDuplicate(a: TheaterEvent, b: TheaterEvent): boolean {
   if (a.aor !== b.aor) return false;
   if (!samePlace(a, b)) return false;
-  if (sharesSource(a, b)) return true;
-  if (hoursApart(a.occurredAt, b.occurredAt) > DUPLICATE_HOURS) return false;
   const sim = titleSimilarity(a.title + ' ' + a.summary, b.title + ' ' + b.summary);
+  // A roundup article ("US orders diplomats out of Saudi Arabia… Houthi strike on a
+  // Saudi airport") yields two country-level events that share a URL and a "place".
+  if (sharesSource(a, b)) return !(countryLevel(a) || countryLevel(b)) || sim >= SHARED_SOURCE_MIN_SIMILARITY;
+  if (hoursApart(a.occurredAt, b.occurredAt) > DUPLICATE_HOURS) return false;
   if (a.category === b.category) return sim >= DUPLICATE_SIMILARITY;
   return sim >= DUPLICATE_SIMILARITY_ACROSS_CATEGORY;
 }

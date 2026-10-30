@@ -63,7 +63,9 @@ Concretely, always verify:
    (`GAZETTEERS[aor]` in `packages/core/src/gazetteer.ts`) and its own regional
    feeds + GDELT query (`worker/src/feeds.ts`). Never geolocate one AOR's events
    against another's gazetteer, and never add a gazetteer entry with unverified
-   coordinates — an uncurated place correctly renders as "position withheld".
+   coordinates. Beyond the curated lists, places resolve only by exact name against
+   the bundled GeoNames table (`worker/data/`), inside the command's own countries
+   (`AOR_COUNTRIES`); ambiguous names stay "position withheld" (decision 2026-10-30).
 
 ## Verification steps (run, don't assume)
 
