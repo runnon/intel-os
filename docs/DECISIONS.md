@@ -1,5 +1,47 @@
 # Decision Log
 
+## 2026-10-01 — Fully free: paywall removed
+
+**Decision (Xavier):** "remove any paywall or anything like that. make it free." Every
+visitor, signed in or not, now gets the whole product with no locks: all time windows
+(72H / 7D / 30D / ALL), the full issue archive (`/t/[aor]/history`) and every past issue
+by serial (`/i/[serial]`), both report sheets, and the "All theaters" view. The
+`/analyst` drafting workspace is free for any **signed-in** user — sign-in stays only
+because each request calls the model and the per-user drafting quota
+(`consume_analyst_quota`) needs an identity; the minute/monthly ceilings remain as abuse
+protection. Supersedes the Analyst tier (2026-09-17) and the free-beta price-intent test
+(2026-09-18).
+
+- **Data access without a service-role key:** migration
+  `20261001211517_fully_free_public_reads.sql` changes the existing SECURITY DEFINER
+  projections — `public_latest_issues()` / `public_latest_issue()` now return each AOR's
+  latest issue row verbatim (whole issue window) and `public_issue_by_serial()` returns
+  any published serial verbatim. The web reads only through these RPCs with the anon
+  key. Raw-table RLS is untouched (anon still cannot select `issues`/`events` directly),
+  no write path is widened, and canonical rows are never mutated (AUTO-10).
+- **Drafting gate:** the same migration drops the entitlement check from
+  `consume_analyst_quota()` (identity still required; no trial tier). Web gates `/analyst`
+  and `/api/analyst` on `getAnalystUser()` (signed in), and drafting reads issues through
+  `public_latest_issues()` instead of the entitlement-gated raw table.
+- **UI:** every LOCKED label, upgrade/trial CTA, price display, A/B price exposure, the
+  free-beta plan picker/reveal and the archive gate component are gone.
+  `enforceAccessWindow` is deleted.
+- **Dormant, not deleted (reversible):** Stripe checkout/portal/webhook routes,
+  `/api/pricing`, `/api/access/claim`, `lib/pricing.ts`, `lib/stripe.ts`, and the
+  entitlement/pricing/webhook tables and functions remain, unreachable from the UI. With
+  no UI calling them, `pricing_viewed` / `pricing_intent` / `checkout_started` /
+  `subscribed` stop firing; `signed_in` still fires.
+- **Deploy ordering:** web and migration ship together on merge to `main`. Until the
+  migration applies, the new web degrades gracefully: windows are unlocked but the
+  projection still carries only 72 hours (aggregates are recomputed so counts match what
+  is shown), older serials 404, and drafting for users without an entitlement row
+  returns a transient 503.
+
+Re-entry path for a paid tier: restore the gate in the web (archive window + `/analyst`),
+restore the 72-hour projections and serial restriction from
+`20260917000002_subscription_hardening.sql` in a new migration, re-add the entitlement
+check to `consume_analyst_quota`, then follow docs/FREE_BETA.md / docs/STRIPE_SETUP.md.
+
 ## 2026-09-22 — Repeats in the register: shared-source dedup + a corpus merge tool
 
 **Report (Xavier):** CENTCOM register entries 10, 14 and 16 read as the same incident,

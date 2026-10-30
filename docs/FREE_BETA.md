@@ -1,5 +1,12 @@
 # Free-beta price-intent test
 
+> **Superseded 2026-10-01 — the product is fully free and the paywall is removed** (see
+> docs/DECISIONS.md, "Fully free: paywall removed"). Nothing in the UI shows prices or a
+> plan picker any more, and `/api/access/claim` is no longer called, so no new
+> `pricing_intent` events are recorded. The flow below is kept as the record of the
+> experiment and as the re-entry path if a paid tier returns; the claim endpoint, RPCs and
+> Stripe code remain in the repo, dormant.
+
 The Analyst tier is currently free, but access is granted only after a person completes
 email/password onboarding, confirms their email, and chooses a displayed monthly or annual
 plan. After that choice, the product reveals that beta access is free: no card is collected

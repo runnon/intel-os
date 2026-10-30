@@ -1,7 +1,8 @@
 import { makeModel } from "@/lib/model";
 import { NextResponse } from "next/server";
-import { consumeAnalystQuota, hasActiveEntitlement } from "@/lib/entitlement";
+import { consumeAnalystQuota, getAnalystUser } from "@/lib/entitlement";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import type { IssueRow } from "@/lib/db";
 import {
   DATA_TIMEOUT_MS,
   enforceDraftMarkings,
@@ -55,12 +56,12 @@ Format in clean GitHub-flavored markdown (headings, bold, bullet lists, links).`
 export async function POST(req: Request) {
   const startedAt = Date.now();
 
-  // Paywall: the analyst drafting workspace is the Analyst-tier feature. Situation
-  // updates stay free; drafting requires an active subscription.
-  if (!(await hasActiveEntitlement())) {
+  // Drafting is free for any signed-in user. Sign-in is still required because each
+  // request calls the model and the abuse quota below is keyed on the user's identity.
+  if (!(await getAnalystUser())) {
     return NextResponse.json(
-      { error: "The analyst workspace requires an active subscription.", code: "subscription_required" },
-      { status: 402 },
+      { error: "Sign in (free) to use the drafting workspace.", code: "sign_in_required" },
+      { status: 401 },
     );
   }
 
@@ -90,19 +91,17 @@ export async function POST(req: Request) {
 
   console.info("[analyst] request-start", { messageCount: messages.length });
 
-  // Load full published issue history through the signed-in session. RLS is the
-  // second entitlement boundary; the anon role cannot read canonical snapshots.
+  // Load each AOR's latest published issue through the public read projection (the same
+  // SECURITY DEFINER RPC the free theater view uses), so drafting needs no entitlement row
+  // and no service-role key.
   const sb = await createSupabaseServerClient();
-  let issues;
+  let issues: IssueRow[];
   try {
     const result = await sb
-      .from("issues")
-      .select("serial, aor, info_cutoff, window_start, tempo, change_log, source_summary, snapshot")
-      .order("published_at", { ascending: false })
-      .limit(30)
+      .rpc("public_latest_issues")
       .abortSignal(AbortSignal.any([req.signal, AbortSignal.timeout(DATA_TIMEOUT_MS)]));
     if (result.error) throw result.error;
-    issues = result.data;
+    issues = (result.data ?? []) as IssueRow[];
   } catch (error) {
     console.error("[analyst] published-data-failed", {
       errorName: error instanceof Error ? error.name : "UnknownError",
@@ -119,7 +118,8 @@ export async function POST(req: Request) {
 
   const context = latest
     .map((i) => {
-      const asc = [...(i.snapshot ?? [])].sort((a: { occurredAt: string }, b: { occurredAt: string }) =>
+      const events = (i.snapshot ?? []) as unknown as Array<Record<string, unknown> & { occurredAt: string }>;
+      const asc = [...events].sort((a, b) =>
         a.occurredAt.localeCompare(b.occurredAt),
       );
       const rows = asc
@@ -155,15 +155,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Drafting usage could not be verified. Try again shortly." }, { status: 503 });
   }
   if (quota !== "ok") {
-    const monthly = quota === "monthly_limit";
-    const trial = quota === "trial_limit";
+    if (quota === "unauthenticated" || quota === "subscription_required") {
+      // "subscription_required" only comes from a database that has not yet applied the
+      // 2026-10-01 fully-free migration; it is transient, not a paywall.
+      return NextResponse.json(
+        { error: "Drafting access could not be verified. Sign in again or try shortly.", code: quota },
+        { status: quota === "unauthenticated" ? 401 : 503 },
+      );
+    }
     return NextResponse.json(
       {
-        error: monthly
+        error: quota === "monthly_limit"
           ? "This month's drafting allowance has been used. It resets at the start of next month."
-          : trial
-            ? "The trial drafting allowance has been used. Subscribe to keep drafting."
-            : "Too many drafting requests. Wait a minute and try again.",
+          : "Too many drafting requests. Wait a minute and try again.",
         code: quota,
       },
       { status: 429 },
