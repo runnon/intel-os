@@ -256,4 +256,19 @@ describe('corroboration gate (social-only leads held)', () => {
     expect(snapshot).toContain('news');
     expect(snapshot).not.toContain('soc');
   });
+
+  it('keeps holding the lead on the next cycle, when it is reloaded without its social flag', async () => {
+    // event_sources has no `social` column, so a stored lead comes back unflagged.
+    // Before 2026-10-30 that let every social-only lead publish one cycle late.
+    const { store, state } = makeFakeStore();
+    state.events.push(fakeEvent({
+      id: 'soc',
+      title: 'Unconfirmed claim of a blast in Aleppo',
+      placeName: 'Aleppo', country: 'Syria', lat: 36.2, lon: 37.16,
+      sources: [{ url: 'https://mastodon.social/@someone/1', outlet: 'Mastodon #OSINT' }],
+    }));
+    const res = await runIngestOnce('CENTCOM', { fetchFeeds: async () => articles, extract: async () => [], store });
+    expect(res.ok).toBe(true);
+    expect(state.issues[0].snapshot.map((e) => e.id)).not.toContain('soc');
+  });
 });

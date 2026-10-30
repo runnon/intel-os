@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Aor, SituationUpdate, TheaterEvent } from '@intel-os/core';
+import type { XPostStore } from './xpost';
 
 /**
  * Storage interface — the pipeline depends on this, tests inject an in-memory
@@ -78,7 +79,7 @@ const toSourceRows = (e: TheaterEvent): SourceRow[] =>
     title: s.title ?? null, published_at: s.publishedAt ?? null,
   }));
 
-export function makeSupabaseStore(url: string, serviceRoleKey: string): Store {
+export function makeSupabaseStore(url: string, serviceRoleKey: string): Store & XPostStore {
   const sb: SupabaseClient = createClient(url, serviceRoleKey, { auth: { persistSession: false } });
 
   const rowToEvent = (r: any, sources: any[]): TheaterEvent => ({
@@ -212,6 +213,28 @@ export function makeSupabaseStore(url: string, serviceRoleKey: string): Store {
         published_issue: run.publishedIssue ?? null, error: run.error ?? null,
       });
       if (error) throw new Error(`recordRun: ${error.message}`);
+    },
+
+    async eventsPublishedSince(since) {
+      // At most one issue per AOR per cycle; each snapshot is the full event payload (AUTO-10).
+      const { data, error } = await sb.from('issues').select('snapshot').gte('published_at', since).limit(DB_PAGE_SIZE);
+      if (error) throw new Error(`eventsPublishedSince: ${error.message}`);
+      return (data ?? []).flatMap((r: { snapshot: TheaterEvent[] | null }) => r.snapshot ?? []);
+    },
+
+    async postedEventIds() {
+      const since = new Date(Date.now() - 14 * 24 * 3600_000).toISOString();
+      const { data, error } = await sb.from('x_posts').select('event_id')
+        .not('post_id', 'is', null).not('event_id', 'is', null).gte('created_at', since).limit(DB_PAGE_SIZE);
+      if (error) throw new Error(`postedEventIds: ${error.message}`);
+      return new Set((data ?? []).map((r: { event_id: string }) => r.event_id));
+    },
+
+    async recordXPosts(rows) {
+      const { error } = await sb.from('x_posts').insert(sanitizeText(rows.map((r) => ({
+        kind: r.kind, event_id: r.eventId, text: r.text, post_id: r.postId, dry_run: r.dryRun, error: r.error ?? null,
+      }))));
+      if (error) throw new Error(`recordXPosts: ${error.message}`);
     },
   };
 }
