@@ -4,6 +4,9 @@ import {
   buildSituationUpdate,
   CENTCOM_GAZETTEER,
   NORTHCOM_GAZETTEER,
+  COUNTRY_FALLBACK_CONFIDENCE,
+  GAZETTEERS,
+  canonicalCountry,
   BLOCS,
   alignmentFor,
   installations,
@@ -118,6 +121,78 @@ describe('gazetteer / geolocate (DATA-2, AUTO-3)', () => {
     const exact = geolocate('United States', 'United States', NORTHCOM_GAZETTEER);
     expect(exact.validated).toBe(true);
     expect(exact.precision).toBe('region');
+  });
+
+  it('an unknown place in a known country plots at the country centroid, region precision', () => {
+    const r = geolocate('Some Village Nobody Curated', 'Yemen');
+    expect(r.validated).toBe(true);
+    expect(r.precision).toBe('region');
+    expect(r.matchedName).toBe('Yemen');
+    expect(r.confidence).toBe(COUNTRY_FALLBACK_CONFIDENCE);
+    expect(r.confidence).toBeGreaterThanOrEqual(GEO_CONFIDENCE_THRESHOLD);
+  });
+
+  it('the country fallback uses the country centroid, never a sub-region of it', () => {
+    const r = geolocate('Some Village Nobody Curated', 'Palestinian Territories');
+    expect(r.matchedName).toBe('Palestinian Territories');
+    const drc = geolocate('Some Village Nobody Curated', 'Democratic Republic of the Congo', GAZETTEERS.AFRICOM);
+    expect(drc.matchedName).toBe('DRC');
+  });
+
+  it('a place that matches but conflicts with the country never falls back to a centroid', () => {
+    const r = geolocate('near the Jazan area border crossing', 'Iran');
+    expect(r.validated).toBe(false);
+    expect(r.lat).toBeNull();
+  });
+
+  it('a country outside the theater, or no country, still lists unplotted', () => {
+    expect(geolocate('Some Village Nobody Curated', 'Germany').validated).toBe(false);
+    expect(geolocate('Some Village Nobody Curated').validated).toBe(false);
+    expect(geolocate('Unspecified', undefined).validated).toBe(false);
+  });
+
+  it('reads common country spellings as the same country', () => {
+    expect(canonicalCountry('Palestinian Territory')).toBe('palestinian territories');
+    expect(canonicalCountry('USA')).toBe('united states');
+    expect(canonicalCountry('Democratic Republic of Congo')).toBe('democratic republic of the congo');
+    // Hebron is curated under Palestinian Territories; a singular spelling is no mismatch.
+    const r = geolocate('Hebron', 'Palestinian Territory');
+    expect(r.validated).toBe(true);
+    expect(r.precision).toBe('settlement');
+    expect(r.confidence).toBeCloseTo(0.95);
+  });
+
+  it('resolves the places the 2026-10-30 unplotted audit found missing', () => {
+    const cases: [string, string, keyof typeof GAZETTEERS][] = [
+      ['Taiz', 'Yemen', 'CENTCOM'],
+      ['Qeshm Island', 'Iran', 'CENTCOM'],
+      ['Ahvaz', 'Iran', 'CENTCOM'],
+      ['Meymeh', 'Iran', 'CENTCOM'],
+      ['King Khalid International Airport', 'Saudi Arabia', 'CENTCOM'],
+      ['Diego Garcia', 'British Indian Ocean Territory', 'CENTCOM'],
+      ['Diego Garcia', 'British Indian Ocean Territory', 'INDOPACOM'],
+      ['Oleshky', 'Ukraine', 'EUCOM'],
+      ['Mekelle', 'Ethiopia', 'AFRICOM'],
+      ['Fort Cavazos', 'United States', 'NORTHCOM'],
+      ['Misawa Air Base', 'Japan', 'INDOPACOM'],
+      ['Falkland Islands', 'Argentina', 'SOUTHCOM'],
+    ];
+    for (const [place, country, aor] of cases) {
+      const r = geolocate(place, country, GAZETTEERS[aor]);
+      expect(r.validated, `${aor} ${place}`).toBe(true);
+      expect(r.precision, `${aor} ${place}`).not.toBe('region');
+    }
+  });
+
+  it('every AOR gazetteer has unique names and plausible coordinates', () => {
+    for (const [aor, gaz] of Object.entries(GAZETTEERS)) {
+      const names = gaz.map((g) => g.name.toLowerCase());
+      expect(new Set(names).size, aor).toBe(names.length);
+      for (const g of gaz) {
+        expect(Math.abs(g.lat), `${aor} ${g.name}`).toBeLessThanOrEqual(90);
+        expect(Math.abs(g.lon), `${aor} ${g.name}`).toBeLessThanOrEqual(180);
+      }
+    }
   });
 
   it('gazetteer has no duplicate normalized names', () => {
