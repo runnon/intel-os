@@ -13,6 +13,9 @@ interface DraftResponse {
 interface DraftRequestOptions {
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
+  /** "explain": the plain-language Ask panel, scoped to one theater. */
+  mode?: "draft" | "explain";
+  aor?: string;
 }
 
 export class AnalystDraftError extends Error {
@@ -39,7 +42,7 @@ export async function requestAnalystDraft(
     const response = await fetchImpl("/api/analyst", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ messages }),
+      body: JSON.stringify({ messages, mode: options.mode, aor: options.aor }),
       signal: controller.signal,
     });
     const raw = await response.text();
