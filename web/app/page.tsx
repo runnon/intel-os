@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Aor } from "@intel-os/core";
 import { latestIssues, type IssueRow } from "@/lib/db";
+import { ageLabel, plainUtc } from "@/lib/age";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +52,9 @@ function Tile({ aor, label, region, issue }: { aor: Aor; label: string; region: 
             {issue.tempo.totalEvents} events · {issue.tempo.newSinceLastIssue} new · issue{" "}
             {String(issue.issue_number).padStart(3, "0")}
           </div>
-          <div className="text-[#918c7d]">CUT-OFF {zulu(issue.info_cutoff)} · events only, no assessment layer</div>
+          <div className="text-[#918c7d]" title={plainUtc(issue.info_cutoff)}>
+            CUT-OFF {zulu(issue.info_cutoff)} · {ageLabel(issue.info_cutoff, Date.now())} · events only, no assessment layer
+          </div>
         </div>
       ) : (
         <div className="font-mono text-xs text-[#918c7d]">
