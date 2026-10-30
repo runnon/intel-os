@@ -146,6 +146,23 @@ export const CENTCOM_GAZETTEER: GazetteerEntry[] = [
   { name: 'Fujairah', aliases: ['fujairah terminal', 'port of fujairah'], country: 'UAE', lat: 25.12, lon: 56.33, kind: 'port' },
   { name: 'Fordow', aliases: ['fordow enrichment', 'fordo'], country: 'Iran', lat: 34.88, lon: 50.99, kind: 'nuclear' },
   { name: 'Suez Canal', aliases: ['suez'], country: 'Egypt', lat: 30.5, lon: 32.35, kind: 'chokepoint' },
+  // Added 2026-10-30 from the unplotted-event audit. Every coordinate was checked
+  // against OpenStreetMap Nominatim (points within 15 km, regions within 400 km).
+  { name: 'Taiz', aliases: ['taizz', 'taiz city', "ta'izz"], country: 'Yemen', lat: 13.58, lon: 44.02, kind: 'city' },
+  { name: 'Shabwah', aliases: ['shabwa', 'shabwah governorate'], country: 'Yemen', lat: 14.75, lon: 46.83, kind: 'region' },
+  { name: 'King Khalid International Airport', aliases: ['riyadh airport', 'king khalid airport'], country: 'Saudi Arabia', lat: 24.958, lon: 46.699, kind: 'airport' },
+  { name: 'Mecca', aliases: ['makkah'], country: 'Saudi Arabia', lat: 21.42, lon: 39.83, kind: 'city' },
+  { name: 'Ahvaz', aliases: ['ahwaz'], country: 'Iran', lat: 31.32, lon: 48.67, kind: 'city' },
+  { name: 'Minab', aliases: [], country: 'Iran', lat: 27.15, lon: 57.08, kind: 'city' },
+  { name: 'Meymeh', aliases: [], country: 'Iran', lat: 33.44, lon: 51.17, kind: 'city' },
+  { name: 'Qeshm Island', aliases: ['qeshm'], country: 'Iran', lat: 26.85, lon: 55.95, kind: 'island' },
+  { name: 'Hebron', aliases: ['al-khalil'], country: 'Palestinian Territories', lat: 31.53, lon: 35.1, kind: 'city' },
+  { name: 'Ben Gurion Airport', aliases: ['ben gurion international airport'], country: 'Israel', lat: 32, lon: 34.88, kind: 'airport' },
+  { name: 'Diego Garcia', aliases: ['naval support facility diego garcia'], country: 'British Indian Ocean Territory', lat: -7.32, lon: 72.42, kind: 'base' }, // INDOPACOM AOR; listed here as the staging base CENTCOM reporting cites
+  { name: 'Egypt', aliases: [], country: 'Egypt', lat: 26.8, lon: 30.8, kind: 'region' },
+  { name: 'Cairo', aliases: [], country: 'Egypt', lat: 30.04, lon: 31.24, kind: 'city' },
+  { name: 'Pakistan', aliases: [], country: 'Pakistan', lat: 30.4, lon: 69.3, kind: 'region' },
+  { name: 'Afghanistan', aliases: [], country: 'Afghanistan', lat: 33.9, lon: 67.7, kind: 'region' },
 ];
 
 export interface GeoResult {
@@ -190,12 +207,71 @@ function precisionFor(kind: GazetteerEntry['kind']): Precision {
 }
 
 /**
+ * The extractor spells a country however its source did. Map the common variants
+ * onto the gazetteer's own country names, so "Palestinian Territory" or "USA" is not
+ * scored as a country MISMATCH against an entry that is in fact the same country.
+ */
+const COUNTRY_ALIASES: Record<string, string> = {
+  'palestine': 'palestinian territories',
+  'palestinian territory': 'palestinian territories',
+  'state of palestine': 'palestinian territories',
+  'united arab emirates': 'uae',
+  'usa': 'united states',
+  'us': 'united states',
+  'united states of america': 'united states',
+  'uk': 'united kingdom',
+  'britain': 'united kingdom',
+  'great britain': 'united kingdom',
+  'democratic republic of congo': 'democratic republic of the congo',
+  'dr congo': 'democratic republic of the congo',
+  'drc': 'democratic republic of the congo',
+  'russian federation': 'russia',
+  'islamic republic of iran': 'iran',
+  'syrian arab republic': 'syria',
+  'republic of korea': 'south korea',
+  'dprk': 'north korea',
+  'burma': 'myanmar',
+  'turkiye': 'turkey',
+  'the netherlands': 'netherlands',
+  'holland': 'netherlands',
+};
+
+export function canonicalCountry(country: string): string {
+  const c = norm(country);
+  return COUNTRY_ALIASES[c] ?? c;
+}
+
+/**
+ * Confidence for an event plotted at its country's curated centroid because the named
+ * place itself is not in the gazetteer. It sits at the partial-match level: above the
+ * threshold (the centroid is a curated, validated coordinate), never above a real hit.
+ */
+export const COUNTRY_FALLBACK_CONFIDENCE = 0.6;
+
+/** The curated country-centroid entry: kind region, named (or aliased) for its own country. */
+function countryCentroid(country: string, gaz: GazetteerEntry[]): GazetteerEntry | null {
+  const c = canonicalCountry(country);
+  return gaz.find((e) =>
+    e.kind === 'region' &&
+    canonicalCountry(e.country) === c &&
+    [e.name, ...e.aliases].some((n) => canonicalCountry(n) === c),
+  ) ?? null;
+}
+
+/**
  * Resolve a reported place name against the gazetteer with a confidence score.
- * Never invents coordinates: no match → nulls with confidence 0 (event lists unplotted).
+ * Never invents coordinates: no match → nulls (event lists unplotted).
+ *
+ * When the place name matches NOTHING in the gazetteer but the reported country has a
+ * curated centroid in this theater, the event plots at that centroid at `region`
+ * precision (dashed frame, DATA-3) — the same fallback extract.ts already uses for an
+ * event reported with a country and no place. A place that DOES match but conflicts
+ * with the country stays unplotted: contradictory evidence is not a fallback case.
  */
 export function geolocate(placeName: string, country?: string, gaz: GazetteerEntry[] = CENTCOM_GAZETTEER): GeoResult {
   const q = norm(placeName);
   if (!q) return { lat: null, lon: null, precision: 'region', confidence: 0, matchedName: null, validated: false };
+  const reported = country ? canonicalCountry(country) : null;
 
   let best: { entry: GazetteerEntry; score: number } | null = null;
   for (const entry of gaz) {
@@ -204,9 +280,23 @@ export function geolocate(placeName: string, country?: string, gaz: GazetteerEnt
     if (names.includes(q)) score = 0.85;
     else if (names.some((n) => partialHit(q, n))) score = 0.6;
     if (score === 0) continue;
-    if (country && norm(entry.country) === norm(country)) score += 0.1;
-    else if (country && entry.country !== 'International' && norm(entry.country) !== norm(country)) score -= 0.25;
+    if (reported && canonicalCountry(entry.country) === reported) score += 0.1;
+    else if (reported && entry.country !== 'International' && canonicalCountry(entry.country) !== reported) score -= 0.25;
     if (!best || score > best.score) best = { entry, score };
+  }
+
+  if (!best && country) {
+    const centroid = countryCentroid(country, gaz);
+    if (centroid) {
+      return {
+        lat: centroid.lat,
+        lon: centroid.lon,
+        precision: 'region',
+        confidence: COUNTRY_FALLBACK_CONFIDENCE,
+        matchedName: centroid.name,
+        validated: true,
+      };
+    }
   }
 
   if (!best || best.score < GEO_CONFIDENCE_THRESHOLD) {
@@ -314,6 +404,33 @@ export const EUCOM_GAZETTEER: GazetteerEntry[] = [
   { name: 'Ust-Luga', aliases: ['ust luga'], country: 'Russia', lat: 59.67, lon: 28.4, kind: 'port' },
   { name: 'Primorsk', aliases: ['primorsk terminal'], country: 'Russia', lat: 60.35, lon: 28.6, kind: 'refinery' },
   { name: 'Belbek Air Base', aliases: ['belbek'], country: 'Ukraine', lat: 44.69, lon: 33.57, kind: 'airport' },
+  // Added 2026-10-30 from the unplotted-event audit. Every coordinate was checked
+  // against OpenStreetMap Nominatim (points within 15 km, regions within 400 km).
+  { name: 'Oleshky', aliases: ['oleshki', 'tsiurupynsk'], country: 'Ukraine', lat: 46.62, lon: 32.72, kind: 'city' },
+  { name: 'Chernihiv', aliases: ['chernigov'], country: 'Ukraine', lat: 51.49, lon: 31.29, kind: 'city' },
+  { name: 'Chornomorsk', aliases: ['chornomorsk port', 'illichivsk'], country: 'Ukraine', lat: 46.3, lon: 30.66, kind: 'port' },
+  { name: 'Slavutych', aliases: [], country: 'Ukraine', lat: 51.52, lon: 30.75, kind: 'city' },
+  { name: 'Lyman', aliases: ['lyman city'], country: 'Ukraine', lat: 48.99, lon: 37.81, kind: 'city' },
+  { name: 'Zhytomyr', aliases: [], country: 'Ukraine', lat: 50.25, lon: 28.66, kind: 'city' },
+  { name: 'Rivne', aliases: ['rovno'], country: 'Ukraine', lat: 50.62, lon: 26.25, kind: 'city' },
+  { name: 'Lutsk', aliases: [], country: 'Ukraine', lat: 50.75, lon: 25.34, kind: 'city' },
+  { name: 'Lozova', aliases: [], country: 'Ukraine', lat: 48.89, lon: 36.32, kind: 'city' },
+  { name: 'Mayaky', aliases: [], country: 'Ukraine', lat: 46.41, lon: 30.27, kind: 'city' },
+  { name: 'Voronezh', aliases: [], country: 'Russia', lat: 51.67, lon: 39.2, kind: 'city' },
+  { name: 'Sochi', aliases: [], country: 'Russia', lat: 43.6, lon: 39.73, kind: 'city' },
+  { name: 'Zeebrugge', aliases: ['port of zeebrugge'], country: 'Belgium', lat: 51.33, lon: 3.2, kind: 'port' },
+  { name: 'Lanester', aliases: [], country: 'France', lat: 47.76, lon: -3.34, kind: 'city' },
+  { name: 'Limoges', aliases: [], country: 'France', lat: 45.83, lon: 1.26, kind: 'city' },
+  { name: 'Tirana', aliases: [], country: 'Albania', lat: 41.33, lon: 19.82, kind: 'city' },
+  { name: 'Athens', aliases: ['acropolis'], country: 'Greece', lat: 37.98, lon: 23.73, kind: 'city' },
+  { name: 'RAF Fairford', aliases: ['fairford'], country: 'United Kingdom', lat: 51.68, lon: -1.79, kind: 'base' },
+  { name: 'Landstuhl Regional Medical Center', aliases: ['landstuhl'], country: 'Germany', lat: 49.4, lon: 7.56, kind: 'facility' },
+  { name: 'Belgium', aliases: [], country: 'Belgium', lat: 50.64, lon: 4.67, kind: 'region' },
+  { name: 'Serbia', aliases: [], country: 'Serbia', lat: 44, lon: 20.9, kind: 'region' },
+  { name: 'Bulgaria', aliases: [], country: 'Bulgaria', lat: 42.7, lon: 25.4, kind: 'region' },
+  { name: 'Albania', aliases: [], country: 'Albania', lat: 41.15, lon: 20.17, kind: 'region' },
+  { name: 'Greece', aliases: [], country: 'Greece', lat: 39.07, lon: 21.82, kind: 'region' },
+  { name: 'Switzerland', aliases: [], country: 'Switzerland', lat: 46.8, lon: 8.23, kind: 'region' },
 ];
 
 export const INDOPACOM_GAZETTEER: GazetteerEntry[] = [
@@ -382,6 +499,25 @@ export const INDOPACOM_GAZETTEER: GazetteerEntry[] = [
   { name: 'Power of Siberia', aliases: ['power of siberia pipeline'], country: 'International', lat: 50.3, lon: 127.5, kind: 'pipeline' },
   { name: 'Ningbo-Zhoushan Port', aliases: ['ningbo', 'zhoushan'], country: 'China', lat: 29.87, lon: 122.0, kind: 'port' },
   { name: 'Changi Naval Base', aliases: ['changi'], country: 'Singapore', lat: 1.32, lon: 103.99, kind: 'base' },
+  // Added 2026-10-30 from the unplotted-event audit. Every coordinate was checked
+  // against OpenStreetMap Nominatim (points within 15 km, regions within 400 km).
+  { name: 'Diego Garcia', aliases: ['naval support facility diego garcia'], country: 'British Indian Ocean Territory', lat: -7.32, lon: 72.42, kind: 'base' },
+  { name: 'Misawa Air Base', aliases: ['misawa'], country: 'Japan', lat: 40.7, lon: 141.37, kind: 'base' },
+  { name: 'Torii Station', aliases: [], country: 'Japan', lat: 26.37, lon: 127.74, kind: 'base' },
+  { name: 'Iruma Air Base', aliases: ['iruma'], country: 'Japan', lat: 35.84, lon: 139.41, kind: 'base' },
+  { name: 'Ishigaki Island', aliases: ['ishigaki'], country: 'Japan', lat: 24.4, lon: 124.18, kind: 'island' },
+  { name: 'Dongsha Islands', aliases: ['pratas islands', 'pratas'], country: 'Taiwan', lat: 20.7, lon: 116.72, kind: 'island' },
+  { name: 'HMAS Stirling', aliases: ['garden island'], country: 'Australia', lat: -32.24, lon: 115.69, kind: 'base' },
+  { name: 'Auli', aliases: [], country: 'India', lat: 30.53, lon: 79.57, kind: 'city' },
+  { name: 'Java Sea', aliases: [], country: 'International', lat: -5.5, lon: 111, kind: 'region' },
+  { name: 'Phnom Penh', aliases: [], country: 'Cambodia', lat: 11.56, lon: 104.92, kind: 'city' },
+  { name: 'Myanmar', aliases: ['burma'], country: 'Myanmar', lat: 21.9, lon: 95.96, kind: 'region' },
+  { name: 'Thailand', aliases: [], country: 'Thailand', lat: 15.87, lon: 100.99, kind: 'region' },
+  { name: 'Malaysia', aliases: [], country: 'Malaysia', lat: 4.21, lon: 101.98, kind: 'region' },
+  { name: 'Nepal', aliases: [], country: 'Nepal', lat: 28.39, lon: 84.12, kind: 'region' },
+  { name: 'Cambodia', aliases: [], country: 'Cambodia', lat: 12.57, lon: 104.99, kind: 'region' },
+  { name: 'Sri Lanka', aliases: [], country: 'Sri Lanka', lat: 7.87, lon: 80.77, kind: 'region' },
+  { name: 'Laos', aliases: [], country: 'Laos', lat: 19.86, lon: 102.5, kind: 'region' },
 ];
 
 export const AFRICOM_GAZETTEER: GazetteerEntry[] = [
@@ -443,6 +579,33 @@ export const AFRICOM_GAZETTEER: GazetteerEntry[] = [
   { name: 'Sharara Oilfield', aliases: ['sharara'], country: 'Libya', lat: 27.85, lon: 12.5, kind: 'refinery' },
   { name: 'Mombasa Port', aliases: ['mombasa'], country: 'Kenya', lat: -4.04, lon: 39.67, kind: 'port' },
   { name: 'East African Crude Oil Pipeline', aliases: ['eacop'], country: 'International', lat: -2.5, lon: 33.0, kind: 'pipeline' },
+  // Added 2026-10-30 from the unplotted-event audit. Every coordinate was checked
+  // against OpenStreetMap Nominatim (points within 15 km, regions within 400 km).
+  { name: 'Tigray', aliases: ['tigray region'], country: 'Ethiopia', lat: 14, lon: 38.9, kind: 'region' },
+  { name: 'Amhara Region', aliases: ['amhara'], country: 'Ethiopia', lat: 11.6, lon: 38, kind: 'region' },
+  { name: 'Mekelle', aliases: ['mekele', 'makelle'], country: 'Ethiopia', lat: 13.5, lon: 39.47, kind: 'city' },
+  { name: 'Mekelle Airport', aliases: ['alula aba nega airport'], country: 'Ethiopia', lat: 13.47, lon: 39.53, kind: 'airport' },
+  { name: 'Adigrat', aliases: [], country: 'Ethiopia', lat: 14.28, lon: 39.46, kind: 'city' },
+  { name: 'Adwa', aliases: ['adua'], country: 'Ethiopia', lat: 14.16, lon: 38.9, kind: 'city' },
+  { name: 'Nyala', aliases: [], country: 'Sudan', lat: 12.05, lon: 24.88, kind: 'city' },
+  { name: 'El Obeid', aliases: ['al-ubayyid', 'el-obeid'], country: 'Sudan', lat: 13.18, lon: 30.22, kind: 'city' },
+  { name: 'Tawila', aliases: [], country: 'Sudan', lat: 13.48, lon: 24.95, kind: 'city' },
+  { name: 'Abyei', aliases: [], country: 'International', lat: 9.59, lon: 28.44, kind: 'city' }, // disputed: Sudan / South Sudan
+  { name: 'Blue Nile State', aliases: ['blue nile'], country: 'Sudan', lat: 11.3, lon: 34.1, kind: 'region' },
+  { name: 'Baidoa', aliases: [], country: 'Somalia', lat: 3.11, lon: 43.65, kind: 'city' },
+  { name: 'Obock', aliases: [], country: 'Djibouti', lat: 11.97, lon: 43.29, kind: 'city' },
+  { name: 'Durban', aliases: [], country: 'South Africa', lat: -29.86, lon: 31.03, kind: 'city' },
+  { name: 'Ituri', aliases: ['ituri province'], country: 'Democratic Republic of the Congo', lat: 1.6, lon: 29.4, kind: 'region' },
+  { name: 'Butembo', aliases: [], country: 'Democratic Republic of the Congo', lat: 0.14, lon: 29.29, kind: 'city' },
+  { name: 'Morocco', aliases: [], country: 'Morocco', lat: 32, lon: -5, kind: 'region' },
+  { name: 'Algeria', aliases: [], country: 'Algeria', lat: 28, lon: 3, kind: 'region' },
+  { name: 'Tunisia', aliases: [], country: 'Tunisia', lat: 34, lon: 9.5, kind: 'region' },
+  { name: 'Central African Republic', aliases: ['car'], country: 'Central African Republic', lat: 6.6, lon: 20.9, kind: 'region' },
+  { name: 'Rwanda', aliases: [], country: 'Rwanda', lat: -1.94, lon: 29.87, kind: 'region' },
+  { name: 'Uganda', aliases: [], country: 'Uganda', lat: 1.37, lon: 32.29, kind: 'region' },
+  { name: 'Djibouti', aliases: [], country: 'Djibouti', lat: 11.83, lon: 42.59, kind: 'region' },
+  { name: 'Cameroon', aliases: [], country: 'Cameroon', lat: 5.7, lon: 12.4, kind: 'region' },
+  { name: 'Mauritius', aliases: [], country: 'Mauritius', lat: -20.2, lon: 57.5, kind: 'region' },
 ];
 
 export const NORTHCOM_GAZETTEER: GazetteerEntry[] = [
@@ -478,6 +641,18 @@ export const NORTHCOM_GAZETTEER: GazetteerEntry[] = [
   { name: 'Canada', aliases: [], country: 'Canada', lat: 56.1, lon: -106.3, kind: 'region' },
   { name: 'Cuba', aliases: [], country: 'Cuba', lat: 21.5, lon: -79.5, kind: 'region' },
   { name: 'Bahamas', aliases: [], country: 'Bahamas', lat: 24.3, lon: -76.0, kind: 'region' },
+  // Added 2026-10-30 from the unplotted-event audit. Every coordinate was checked
+  // against OpenStreetMap Nominatim (points within 15 km, regions within 400 km).
+  { name: 'Fort Hood', aliases: ['fort cavazos'], country: 'United States', lat: 31.14, lon: -97.78, kind: 'base' },
+  { name: 'Joint Base Elmendorf-Richardson', aliases: ['jber', 'elmendorf'], country: 'United States', lat: 61.25, lon: -149.8, kind: 'base' },
+  { name: 'Naval Base Point Loma', aliases: ['point loma'], country: 'United States', lat: 32.68, lon: -117.24, kind: 'base' },
+  { name: 'Naval Air Station North Island', aliases: ['nas north island', 'north island'], country: 'United States', lat: 32.7, lon: -117.21, kind: 'base' },
+  { name: 'Cape Canaveral Space Force Station', aliases: ['cape canaveral'], country: 'United States', lat: 28.49, lon: -80.58, kind: 'base' },
+  { name: 'Yakima Training Center', aliases: [], country: 'United States', lat: 46.761, lon: -120.191, kind: 'base' },
+  { name: 'Thurmont', aliases: ['camp david'], country: 'United States', lat: 39.62, lon: -77.41, kind: 'city' },
+  { name: 'Miami', aliases: [], country: 'United States', lat: 25.76, lon: -80.19, kind: 'city' },
+  { name: 'Alberta', aliases: [], country: 'Canada', lat: 53.9, lon: -116.6, kind: 'region' },
+  { name: 'Greenland', aliases: [], country: 'Greenland', lat: 72, lon: -40, kind: 'region' },
 ];
 
 export const SOUTHCOM_GAZETTEER: GazetteerEntry[] = [
@@ -527,6 +702,13 @@ export const SOUTHCOM_GAZETTEER: GazetteerEntry[] = [
   { name: 'Cano Limon Pipeline', aliases: ['cano limon', 'caño limón'], country: 'Colombia', lat: 6.93, lon: -71.3, kind: 'pipeline' },
   { name: 'Cartagena Refinery', aliases: ['reficar'], country: 'Colombia', lat: 10.32, lon: -75.5, kind: 'refinery' },
   { name: 'Callao Port', aliases: ['callao'], country: 'Peru', lat: -12.05, lon: -77.14, kind: 'port' },
+  // Added 2026-10-30 from the unplotted-event audit. Every coordinate was checked
+  // against OpenStreetMap Nominatim (points within 15 km, regions within 400 km).
+  { name: 'Falkland Islands', aliases: ['malvinas', 'islas malvinas'], country: 'Falkland Islands', lat: -51.75, lon: -59.17, kind: 'island' },
+  { name: 'Santa Marta', aliases: [], country: 'Colombia', lat: 11.24, lon: -74.2, kind: 'city' },
+  { name: 'El Salvador', aliases: [], country: 'El Salvador', lat: 13.79, lon: -88.9, kind: 'region' },
+  { name: 'Dominican Republic', aliases: [], country: 'Dominican Republic', lat: 18.74, lon: -70.16, kind: 'region' },
+  { name: 'Costa Rica', aliases: [], country: 'Costa Rica', lat: 9.75, lon: -83.75, kind: 'region' },
 ];
 
 
