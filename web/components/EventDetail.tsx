@@ -13,6 +13,8 @@ export default function EventCallout({
   onClose,
   onPrev,
   onNext,
+  onBack,
+  stepNoun = "EVENT",
 }: {
   event: NumberedEvent;
   color: string;
@@ -20,12 +22,23 @@ export default function EventCallout({
   onClose: () => void;
   onPrev: () => void;
   onNext: () => void;
+  /** Opened from a same-location list: return to it. */
+  onBack?: { label: string; go: () => void };
+  stepNoun?: string;
 }) {
   return (
     <div
       className="absolute top-[96px] left-3 z-20 w-[330px] max-w-[calc(100%-24px)] max-h-[calc(100%-152px)] overflow-y-auto bg-[#f5f2ea] border border-[#171712] shadow-xl"
       style={{ borderLeftWidth: 5, borderLeftColor: color }}
     >
+      {onBack && (
+        <button
+          onClick={onBack.go}
+          className="block w-full text-left px-4 pt-2 font-mono text-[9px] tracking-widest text-[#1f4e79] hover:underline"
+        >
+          ◂ {onBack.label}
+        </button>
+      )}
       {/* header */}
       <div className="flex items-start gap-3 px-4 pt-3">
         <span
@@ -95,10 +108,10 @@ export default function EventCallout({
       {/* prev / next stepping */}
       <div className="flex border-t border-[#171712] font-mono text-[10px]">
         <button onClick={onPrev} className="flex-1 py-1.5 hover:bg-[#eae4d2] border-r border-[#dcd6c4]">
-          ◂ PREV EVENT
+          ◂ PREV {stepNoun}
         </button>
         <button onClick={onNext} className="flex-1 py-1.5 hover:bg-[#eae4d2]">
-          NEXT EVENT ▸
+          NEXT {stepNoun} ▸
         </button>
       </div>
     </div>

@@ -8,6 +8,7 @@ import type { IssueRow } from "@/lib/db";
 import { applyView, decodeView, encodeView, type ViewState } from "@/lib/urlState";
 import TheaterMap, { type NumberedEvent } from "./TheaterMap";
 import EventCallout from "./EventDetail";
+import StackList from "./StackList";
 
 const WINDOW_PRESETS: { label: string; hours: number | null }[] = [
   { label: "72H", hours: 72 },
@@ -114,8 +115,21 @@ export default function TheaterView({
     return () => window.cancelAnimationFrame(frame);
   }, [filtered, view.selectedEvent]);
 
-  // prev/next step through the filtered set in chronological order
-  const chrono = useMemo(() => [...filtered].sort((a, b) => a.num - b.num), [filtered]);
+  // Events sharing one map position, opened as a list (newest first). Filters
+  // still apply; the list closes itself when nothing in it survives them.
+  const [stackIds, setStackIds] = useState<string[] | null>(null);
+  const stackEvents = useMemo(
+    () => (stackIds ? filtered.filter((e) => stackIds.includes(e.id)).sort((a, b) => b.num - a.num) : []),
+    [filtered, stackIds],
+  );
+  const inStack = selected != null && stackEvents.some((e) => e.id === selected.id);
+
+  // prev/next step chronologically — within the location list when the event was
+  // opened from one, otherwise through the whole filtered set
+  const chrono = useMemo(
+    () => [...(inStack ? stackEvents : filtered)].sort((a, b) => a.num - b.num),
+    [filtered, stackEvents, inStack],
+  );
   const selIdx = selected ? chrono.findIndex((e) => e.id === selected.id) : -1;
   const step = (d: -1 | 1) => {
     if (chrono.length === 0) return;
@@ -134,6 +148,7 @@ export default function TheaterView({
     view.categories.length > 0 || view.usOnly || view.confidenceFloor !== "low";
 
   const affColor = (a: Affiliation) => AFF_META.find((m) => m.key === a)?.hex ?? "#171712";
+  const affFill = (a: Affiliation) => AFF_META.find((m) => m.key === a)?.fill ?? "#f5f2ea";
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
@@ -265,7 +280,14 @@ export default function TheaterView({
             events={plottable}
             referenceEvents={filtered}
             selectedId={view.selectedEvent}
-            onSelect={(id) => updateView({ selectedEvent: id })}
+            onSelect={(id) => {
+              if (!id || !stackIds?.includes(id)) setStackIds(null);
+              updateView({ selectedEvent: id });
+            }}
+            onSelectStack={(ids) => {
+              setStackIds(ids);
+              updateView({ selectedEvent: null });
+            }}
             allTheaters={allTheaters}
           />
 
@@ -370,10 +392,28 @@ export default function TheaterView({
             <EventCallout
               event={selected}
               color={affColor(selected.affiliation)}
-              fill={AFF_META.find((m) => m.key === selected.affiliation)?.fill ?? "#f5f2ea"}
-              onClose={() => updateView({ selectedEvent: null })}
+              fill={affFill(selected.affiliation)}
+              onClose={() => {
+                setStackIds(null);
+                updateView({ selectedEvent: null });
+              }}
               onPrev={() => step(-1)}
               onNext={() => step(1)}
+              onBack={
+                inStack
+                  ? { label: `ALL ${stackEvents.length} AT ${selected.placeName.toUpperCase()}`, go: () => updateView({ selectedEvent: null }) }
+                  : undefined
+              }
+              stepNoun={inStack ? "HERE" : "EVENT"}
+            />
+          )}
+          {!selected && stackEvents.length > 0 && (
+            <StackList
+              events={stackEvents}
+              colorFor={affColor}
+              fillFor={affFill}
+              onPick={(id) => updateView({ selectedEvent: id })}
+              onClose={() => setStackIds(null)}
             />
           )}
         </div>
