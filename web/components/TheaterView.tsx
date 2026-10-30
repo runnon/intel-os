@@ -6,10 +6,12 @@ import type { Affiliation, Aor, EventCategory } from "@intel-os/core";
 import { AORS, BLOCS, IDENTITY_COLOR_LIGHT } from "@intel-os/core";
 import type { IssueRow } from "@/lib/db";
 import { applyView, decodeView, encodeView, type ViewState } from "@/lib/urlState";
-import TheaterMap, { type NumberedEvent } from "./TheaterMap";
+import TheaterMap, { type CommunityPoint, type NumberedEvent } from "./TheaterMap";
 import EventCallout from "./EventDetail";
 import AskPanel from "./AskPanel";
 import AccountLink from "./AccountLink";
+import CommunityPanel from "./CommunityPanel";
+import { COMMUNITY_COLOR, type CommunityReport } from "@/lib/community";
 
 const WINDOW_PRESETS: { label: string; hours: number | null }[] = [
   { label: "72H", hours: 72 },
@@ -50,8 +52,18 @@ export default function TheaterView({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [view, setView] = useState<ViewState>(() => decodeView(new URLSearchParams(searchParams.toString())));
-  // Sidebar tab; ?tab=ask survives the sign-in round trip.
-  const [tab, setTab] = useState<"index" | "ask">(() => (searchParams.get("tab") === "ask" ? "ask" : "index"));
+  // Sidebar tab; ?tab=ask / ?tab=submit survive the sign-in round trip.
+  const initialTab = searchParams.get("tab");
+  const [tab, setTab] = useState<"index" | "community" | "ask">(() =>
+    allTheaters ? "index" : initialTab === "ask" ? "ask" : initialTab === "submit" || initialTab === "community" ? "community" : "index",
+  );
+  // Community layer: OFF by default; turned on by its toggle or by opening its tab.
+  const [communityOn, setCommunityOn] = useState(tab === "community");
+  const [community, setCommunity] = useState<CommunityReport[]>([]);
+  const [communityLoading, setCommunityLoading] = useState(false);
+  const [communityError, setCommunityError] = useState<string | null>(null);
+  const [communitySel, setCommunitySel] = useState<string | null>(null);
+  const [communityNonce, setCommunityNonce] = useState(0);
   const viewRef = useRef(view);
   viewRef.current = view;
 
@@ -136,6 +148,41 @@ export default function TheaterView({
 
   const secondaryActive =
     view.categories.length > 0 || view.usOnly || view.confidenceFloor !== "low";
+
+  // Fetch community reports only while the layer is on (never for "All theaters").
+  useEffect(() => {
+    if (!communityOn || allTheaters) return;
+    let live = true;
+    setCommunityLoading(true);
+    setCommunityError(null);
+    fetch(`/api/community?aor=${issue.aor}`, { cache: "no-store" })
+      .then(async (r) => {
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error ?? "Couldn't load community reports.");
+        if (live) setCommunity(d.reports ?? []);
+      })
+      .catch((e) => live && setCommunityError(e instanceof Error ? e.message : "Couldn't load community reports."))
+      .finally(() => live && setCommunityLoading(false));
+    return () => {
+      live = false;
+    };
+  }, [communityOn, allTheaters, issue.aor, communityNonce]);
+
+  const communityPoints: CommunityPoint[] = useMemo(
+    () =>
+      communityOn
+        ? community
+            .filter((r) => r.lat != null && r.lon != null)
+            .map((r) => ({ id: r.id, lat: r.lat!, lon: r.lon!, title: r.title, placeName: r.placeName, precision: r.precision }))
+        : [],
+    [community, communityOn],
+  );
+
+  const openCommunity = (id: string | null) => {
+    setCommunityOn(true);
+    setTab("community");
+    setCommunitySel(id);
+  };
 
   const affColor = (a: Affiliation) => AFF_META.find((m) => m.key === a)?.hex ?? "#171712";
 
@@ -256,9 +303,34 @@ export default function TheaterView({
             </label>
           </div>
         </details>
+        {!allTheaters && (
+          <button
+            onClick={() => {
+              const on = !communityOn;
+              setCommunityOn(on);
+              if (!on) {
+                setCommunitySel(null);
+                if (tab === "community") setTab("index");
+              }
+            }}
+            aria-pressed={communityOn}
+            title="Unverified reports sent in by users. Not part of the situation update."
+            className={`px-2.5 py-1 border flex items-center gap-1.5 ${
+              communityOn ? "text-white" : "border-[#c9c2ac] text-[#6b675c] hover:border-[#6b675c]"
+            }`}
+            style={communityOn ? { backgroundColor: COMMUNITY_COLOR, borderColor: COMMUNITY_COLOR } : undefined}
+          >
+            <span
+              className="inline-block w-2 h-2 rounded-full"
+              style={{ backgroundColor: communityOn ? "#fff" : "transparent", border: `1.5px solid ${communityOn ? "#fff" : COMMUNITY_COLOR}` }}
+            />
+            COMMUNITY
+          </button>
+        )}
         <span className="ml-auto text-[#6b675c]">
           {filtered.length} events · {plottable.length} plotted
           {unplotted.length > 0 && ` · ${unplotted.length} unplotted`}
+          {communityOn && !allTheaters && ` · ${community.length} community (unverified)`}
         </span>
       </div>
 
@@ -272,6 +344,9 @@ export default function TheaterView({
             selectedId={view.selectedEvent}
             onSelect={(id) => updateView({ selectedEvent: id })}
             allTheaters={allTheaters}
+            community={communityPoints}
+            selectedCommunityId={communitySel}
+            onSelectCommunity={(id) => openCommunity(id)}
           />
 
           {/* LEGEND doubles as the affiliation filter (proof-build block) */}
@@ -339,6 +414,16 @@ export default function TheaterView({
                 </div>
               ))}
             </div>
+            {communityOn && !allTheaters && (
+              <div className="mt-1.5 border-t border-[#c9c2ac] pt-1.5 text-[8px] text-[#514d43]">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-4 flex justify-center shrink-0">
+                    <span className="inline-block w-[8px] h-[8px] rounded-full border border-[#f5f2ea]" style={{ backgroundColor: COMMUNITY_COLOR }} />
+                  </span>
+                  Community report · unverified
+                </div>
+              </div>
+            )}
             {(() => {
               const aorKey = issue.aor as Aor;
               const def = BLOCS[aorKey];
@@ -387,17 +472,18 @@ export default function TheaterView({
         <aside className="md:w-[340px] md:border-l border-t md:border-t-0 border-[#c9c2ac] bg-[#f5f2ea] flex flex-col min-h-0 max-h-[40dvh] md:max-h-none">
           <div role="tablist" className="flex border-b border-[#e3ddcc] font-mono text-[9px] tracking-[0.2em] shrink-0">
             {([
-              ["index", "EVENT INDEX · NEWEST FIRST"],
-              ...(allTheaters ? [] : [["ask", "ASK AI"]]),
-            ] as ["index" | "ask", string][]).map(([key, label]) => (
+              ["index", allTheaters ? "EVENT INDEX · NEWEST FIRST" : "EVENTS"],
+              ...(allTheaters ? [] : [["community", "COMMUNITY"], ["ask", "ASK AI"]]),
+            ] as ["index" | "community" | "ask", string][]).map(([key, label]) => (
               <button
                 key={key}
                 role="tab"
                 aria-selected={tab === key}
-                onClick={() => setTab(key)}
-                className={`px-4 py-2 ${key === "ask" ? "ml-auto border-l border-[#e3ddcc]" : ""} ${
+                onClick={() => (key === "community" ? openCommunity(communitySel) : setTab(key))}
+                className={`px-4 py-2 ${key !== "index" ? "border-l border-[#e3ddcc]" : ""} ${key === "community" ? "ml-auto" : ""} ${
                   tab === key ? "text-[#171712] bg-[#efeadb]" : "text-[#918c7d] hover:text-[#171712]"
                 }`}
+                style={key === "community" && tab === key ? { color: COMMUNITY_COLOR } : undefined}
               >
                 {label}
               </button>
@@ -405,6 +491,20 @@ export default function TheaterView({
           </div>
           {tab === "ask" && !allTheaters ? (
             <AskPanel aor={issue.aor} cutoffIso={issue.info_cutoff} onSelectEvent={(id) => updateView({ selectedEvent: id })} />
+          ) : tab === "community" && !allTheaters ? (
+            <CommunityPanel
+              aor={issue.aor}
+              reports={community}
+              loading={communityLoading}
+              loadError={communityError}
+              selectedId={communitySel}
+              onSelect={setCommunitySel}
+              onChanged={(id) => {
+                if (id) setCommunitySel(id);
+                setCommunityNonce((n) => n + 1);
+              }}
+              startWithForm={initialTab === "submit"}
+            />
           ) : (
           <div ref={eventListRef} className="overflow-y-auto flex-1">
             {filtered.length === 0 && (
