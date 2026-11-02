@@ -8,6 +8,9 @@ correct, briefable sheet.
 not a document produced under any classification system — it carries no classification
 markings. MIT licensed — see `LICENSE` and `CONTRIBUTING.md`.
 
+Place data: [GeoNames](https://www.geonames.org/) (CC-BY 4.0), bundled in `worker/data/`
+and rebuilt with `scripts/build-places.ts`.
+
 **Live**: https://intel-os.org (all six combatant commands, 12-hour unattended cycle)
 
 **Long-term goal**: Theater Picture is the first app. The larger aim is a platform for
@@ -75,9 +78,10 @@ Env:
 |---|---|
 | AUTO-1 no-change issues publish | `worker/src/pipeline.ts` |
 | AUTO-2 dedup carries all sources | `packages/core/src/dedup.ts` |
-| AUTO-3 low-confidence geocodes withheld | `packages/core/src/gazetteer.ts` |
+| AUTO-3 low-confidence / ambiguous geocodes withheld | `packages/core/src/gazetteer.ts` (curated + GeoNames index) |
 | AUTO-5 no judgement sections | `packages/core/src/issue.ts` (+ tests) |
-| AUTO-9 failed run publishes nothing | `worker/src/pipeline.ts` |
+| AUTO-5 "US impact" shows reported effect only | `packages/core/src/usimpact.ts` (+ tests) |
+| AUTO-9 failed run publishes nothing, and is recorded and alarmed | `worker/src/pipeline.ts`, `worker/src/index.ts`, `/api/health`, `.github/workflows/staleness.yml` |
 | AUTO-10 issues immutable/addressable | `issues.snapshot` column |
 | DATA-1..6 provenance/precision/revisions | schema + core types |
 | UX-1/2 one state, URL-encoded | `web/lib/urlState.ts` |

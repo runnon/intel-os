@@ -2,6 +2,13 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Aor, SituationUpdate, TheaterEvent } from '@intel-os/core';
 import type { XPostStore } from './xpost';
 
+/** Cycle-level context stamped on every ingest_runs row (migration 20261030230000). */
+export interface RunMeta {
+  cycleId?: string;
+  codeVersion?: string;
+  sourceHealth?: unknown;
+}
+
 /**
  * Storage interface — the pipeline depends on this, tests inject an in-memory
  * fake, production uses Supabase (service role; RLS gives the public read-only).
@@ -15,7 +22,7 @@ export interface Store {
   recordRun(run: {
     aor: Aor; ok: boolean; fetched: number; extracted: number; deduped: number;
     publishedIssue?: string; error?: string;
-  }): Promise<void>;
+  } & RunMeta): Promise<void>;
 }
 
 /**
@@ -211,6 +218,8 @@ export function makeSupabaseStore(url: string, serviceRoleKey: string): Store & 
         aor: run.aor, finished_at: new Date().toISOString(), ok: run.ok,
         fetched: run.fetched, extracted: run.extracted, deduped: run.deduped,
         published_issue: run.publishedIssue ?? null, error: run.error ?? null,
+        cycle_id: run.cycleId ?? null, code_version: run.codeVersion ?? null,
+        source_health: run.sourceHealth ?? null,
       });
       if (error) throw new Error(`recordRun: ${error.message}`);
     },

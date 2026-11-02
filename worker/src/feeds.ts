@@ -188,7 +188,27 @@ async function fetchGdelt(query: string): Promise<Article[]> {
  * public-source guard. A feed shared by two AORs (e.g. BBC Latin America) is
  * fetched once and tagged for both.
  */
-export async function fetchGlobalPool(): Promise<PooledArticle[]> {
+/** Per-cycle source accounting, stored on every ingest_runs row (audit 2026-10-30:
+ * feed failures were only console warnings, so a shrinking pool went unnoticed). */
+export interface SourceHealth {
+  ok: number;
+  failed: number;
+  /** failed / attempted; at or above DEGRADED_RATIO the cycle is flagged degraded */
+  failedRatio: number;
+  degraded: boolean;
+  /** up to MAX_FAILURES_LISTED "kind host: reason" lines */
+  failures: string[];
+}
+
+export const DEGRADED_RATIO = 0.5;
+const MAX_FAILURES_LISTED = 40;
+
+export interface GlobalPool {
+  articles: PooledArticle[];
+  health: SourceHealth;
+}
+
+export async function fetchGlobalPool(): Promise<GlobalPool> {
   // Build a fetch plan deduped by URL, tracking which AORs each feed serves.
   const plan = new Map<string, { url: string; outlet: string; aors: Set<Aor> }>();
   const addFeed = (url: string, outlet: string, aor?: Aor) => {
@@ -206,6 +226,20 @@ export async function fetchGlobalPool(): Promise<PooledArticle[]> {
   const cutoff = Date.now() - MAX_ARTICLE_AGE_MS;
   const pool = new Map<string, PooledArticle>();
   let okSources = 0;
+  let failedSources = 0;
+  let okSocial = 0; // counted for health, but social alone never keeps a cycle alive
+  const failures: string[] = [];
+  const fail = (kind: string, where: string, reason: unknown) => {
+    failedSources++;
+    let host = where;
+    try {
+      host = new URL(where).host;
+    } catch {
+      // not a URL (e.g. an AOR name) — keep as is
+    }
+    const why = (reason instanceof Error ? reason.message : String(reason)).slice(0, 120);
+    if (failures.length < MAX_FAILURES_LISTED) failures.push(`${kind} ${host}: ${why}`);
+  };
 
   const ingest = (arts: Article[], aors: Aor[]) => {
     for (const a of arts) {
@@ -232,6 +266,7 @@ export async function fetchGlobalPool(): Promise<PooledArticle[]> {
       ingest(r.value, feeds[i].aors);
     } else {
       console.warn(`feed failed: ${feeds[i].url}: ${r.reason}`);
+      fail('rss', feeds[i].url, r.reason);
     }
   });
 
@@ -242,6 +277,7 @@ export async function fetchGlobalPool(): Promise<PooledArticle[]> {
       okSources++;
     } catch (e) {
       console.warn(`[${aor}] gdelt failed: ${e}`);
+      fail('gdelt', aor, e);
     }
   }
 
@@ -250,15 +286,35 @@ export async function fetchGlobalPool(): Promise<PooledArticle[]> {
   // Mastodon hashtag RSS needs no credentials; Bluesky/Telegram are opt-in.
   const socialRss = await Promise.allSettled(SOCIAL_RSS.map((f) => fetchRss(f.url, f.outlet)));
   socialRss.forEach((r, i) => {
-    if (r.status === 'fulfilled') ingest(r.value.map((a) => ({ ...a, social: true })), []);
-    else console.warn(`social feed failed: ${SOCIAL_RSS[i].url}: ${r.reason}`);
+    if (r.status === 'fulfilled') {
+      okSocial++;
+      ingest(r.value.map((a) => ({ ...a, social: true })), []);
+    } else {
+      console.warn(`social feed failed: ${SOCIAL_RSS[i].url}: ${r.reason}`);
+      fail('social', SOCIAL_RSS[i].url, r.reason);
+    }
   });
   if (socialEnabled()) {
     for (const { aor, articles } of await fetchSocial()) ingest(articles, aor ? [aor] : []);
   }
 
   if (okSources === 0) throw new Error('global pool: all sources failed');
-  return [...pool.values()].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
+  const attempted = okSources + okSocial + failedSources;
+  const failedRatio = attempted ? Math.round((failedSources / attempted) * 100) / 100 : 0;
+  const health: SourceHealth = {
+    ok: okSources + okSocial,
+    failed: failedSources,
+    failedRatio,
+    degraded: failedRatio >= DEGRADED_RATIO,
+    failures,
+  };
+  if (health.degraded) {
+    console.error(`[sources] DEGRADED: ${failedSources}/${attempted} sources failed this cycle`);
+  }
+  return {
+    articles: [...pool.values()].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)),
+    health,
+  };
 }
 
 // Per-AOR relevance keywords derived from that command's curated gazetteer

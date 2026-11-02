@@ -78,7 +78,8 @@ export function sourceSummary(events: TheaterEvent[]): SourceSummary {
     `All information derives from publicly available reporting across ${outlets.length} outlet(s): ${top}. ` +
     `${singleSource} of ${events.length} events rest on a single source and should not be treated as confirmed. ` +
     `No imagery exploitation or independent collection was performed; positions derive from place names ` +
-    `validated against a gazetteer, and region-level reports are listed without a plotted point.`;
+    `validated against curated gazetteers and GeoNames. Region-level reports plot at the area's reference point ` +
+    `(dashed frame), and places that cannot be resolved unambiguously are listed without a plotted point.`;
   return { outletCounts, totalSources: total, singleSourceEvents: singleSource, statement };
 }
 
