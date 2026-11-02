@@ -17,9 +17,11 @@ if [[ -z $pw ]]; then
   read -rs pw
   echo
 fi
-pw=${pw// /}
+# Google shows the password as four groups of four separated by (non-breaking) spaces;
+# keep only the letters.
+pw=${pw//[^a-zA-Z]/}
 if [[ ${#pw} -ne 16 ]]; then
-  echo "That isn't 16 letters. Run this again and paste the app password Google showed."
+  echo "That was ${#pw} letters, not 16. Run this again and paste the app password Google showed."
   exit 1
 fi
 
