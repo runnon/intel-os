@@ -467,6 +467,7 @@ export default function TheaterView({
               setStackIds(ids);
               updateView({ selectedEvent: null });
             }}
+            expandedIds={stackEvents.length > 0 ? stackIds : null}
             allTheaters={allTheaters}
             community={communityPoints}
             selectedCommunityId={communitySel}

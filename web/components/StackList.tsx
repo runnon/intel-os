@@ -24,11 +24,11 @@ export default function StackList({
   const first = events[0];
   if (!first) return null;
   return (
-    <div className={`${CARD_POSITION} flex flex-col bg-[#f5f2ea] border border-[#171712] shadow-xl`}>
+    <div className={`${CARD_POSITION} max-md:max-h-[45%] flex flex-col bg-[#f5f2ea] border border-[#171712] shadow-xl`}>
       <div className="flex items-start gap-3 px-4 pt-3 pb-2 border-b border-[#dcd6c4] shrink-0">
         <div className="min-w-0 flex-1">
           <h3 className="text-[15px] font-semibold leading-tight">{first.placeName}</h3>
-          <p className="text-[12px] text-[#6b675c] mt-0.5">{events.length} events at this place, newest first. Tap one to read it.</p>
+          <p className="text-[12px] text-[#6b675c] mt-0.5">{events.length} events at this place, now spread out on the map. Tap one here or on the map to read it.</p>
         </div>
         <button onClick={onClose} aria-label="Close list" className="shrink-0 -mr-2 -mt-1 w-9 h-9 flex items-center justify-center text-lg text-[#6b675c] hover:text-[#171712] hover:bg-[#eae4d2]">
           ✕

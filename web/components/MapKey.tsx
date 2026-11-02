@@ -85,7 +85,7 @@ export default function MapKey({
             <span className="w-7 flex justify-center shrink-0">
               <span className="w-4 h-4 rounded-full bg-[#171712] text-[#f5f2ea] text-[9px] font-bold flex items-center justify-center">3</span>
             </span>
-            Black badge: several events at one place. Tap to see them all.
+            Black badge: several events at one place. Tap it to spread them out.
           </div>
           {communityOn && (
             <div className="flex items-center gap-2">
