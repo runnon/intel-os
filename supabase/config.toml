@@ -2,15 +2,32 @@
 # everything else stays as set on the project. Preview, then apply:
 #   supabase config diff --project-ref huhrdcxvdgmuvdgwymdj
 #   supabase config push --project-ref huhrdcxvdgmuvdgwymdj
+# The SMTP password is never stored here: export SUPABASE_AUTH_SMTP_PASS (a Gmail app
+# password) in your own shell before diff/push.
 project_id = "intel-os"
 
 [auth]
 site_url = "https://intel-os.org"
 additional_redirect_urls = ["https://intel-os.org/auth/callback", "http://localhost:3000/auth/callback"]
 
+[auth.rate_limit]
+# Sign-in emails per hour for the whole project. Supabase's built-in sender is capped at
+# 2/hour; a custom SMTP sender (below) allows raising it.
+email_sent = 30
+
 [auth.email]
 # Sign-in is a 6-digit code typed on the page (web/app/signin/page.tsx).
 otp_length = 6
+
+# Send through Gmail instead of Supabase's rate-limited built-in sender.
+[auth.email.smtp]
+enabled = true
+host = "smtp.gmail.com"
+port = 587
+user = "xakkahn2001@gmail.com"
+pass = "env(SUPABASE_AUTH_SMTP_PASS)"
+admin_email = "xakkahn2001@gmail.com"
+sender_name = "Theater Picture"
 
 # signInWithOtp sends "magic_link" to existing users and "confirmation" to new ones;
 # both carry the same code.
