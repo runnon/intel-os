@@ -1,5 +1,85 @@
 # Decision Log
 
+## 2026-10-30 — Audit fixes: no assessment in "US impact"; failures and stale output are recorded and alarmed
+
+An audit of the live system found judgement leaking into the unattended path, plus
+failures that left no trace. Fixed here:
+
+- **AUTO-5, "US impact" line:** of 616 stored `us_impact` lines, about two-thirds were
+  assessment rather than reported effect: "could affect…", "a critical chokepoint",
+  ", strengthening interoperability", "raises the threat level".
+  - The extractor schema now asks for a *reported, direct* effect only.
+  - `factualUsImpact` (packages/core/src/usimpact.ts) is deterministic and uses no model.
+    It trims a trailing evaluative clause, then withholds the whole line if any
+    assessment marker remains. It keeps about 200 of 616 stored lines.
+  - It applies at extraction and on every render: event card, report sheet, and the
+    analyst context. Issues published before this change (immutable, AUTO-10) therefore
+    also display clean. Withholding a factual line is the accepted failure mode.
+- **Silent feed failures:**
+  - `fetchGlobalPool` now returns a `SourceHealth` (ok and failed counts, ratio, up to 40
+    failure lines). It logs `DEGRADED` at 50% or more failed.
+  - Every `ingest_runs` row stores it in `source_health`.
+- **Missed cycles left no record:**
+  - Extractor setup and the shared fetch were outside any recorder. A cycle that died
+    there (10-22, a 36-hour gap) wrote nothing.
+  - That path now records a failed run per AOR and exits 1 (AUTO-9).
+  - Each cycle's rows share a `cycle_id`.
+- **Stale code in production:** the worker deployed only by hand and ran 09-17 code
+  until 10-30.
+  - `.github/workflows/deploy-worker.yml` runs the core and worker tests and typecheck,
+    stamps `worker/VERSION`, then runs `railway up` on every main push that touches
+    worker code. It needs the `RAILWAY_TOKEN` secret.
+  - Each run records `code_version`: the Railway git SHA, else VERSION, else `unknown`.
+    `unknown` means someone deployed by hand.
+- **Alarm:**
+  - `public_issue_freshness()` returns, per command, the latest issue time and the last
+    run's time and ok flag. It exposes no error text.
+  - `/api/health` returns 503 if any command's issue is more than 14 h old (the cron
+    runs every 12 h) or its last run failed.
+  - `.github/workflows/staleness.yml` probes it hourly. A failed scheduled run emails
+    the repo's notification recipients. No new service or secret is needed.
+
+## 2026-10-30 — GeoNames-backed geolocation; region anchors are not "the same place"
+
+**Decision (Xavier, "make this product as good as possible"):** resolve places the curated
+gazetteers don't list against a bundled GeoNames table, as this module's own header always
+anticipated ("a GeoNames-backed table replaces it under the same interface").
+
+- **Why:** of 1,000 stored events, 72% plotted only at a country centroid. 214 of those
+  named a real place (Lagos, Port Sudan, Pokrovsk, Blantyre, the Java Sea, Kursk Oblast…)
+  that simply wasn't in the hand-curated lists.
+- **Data:** `worker/data/places.tsv.gz` (~298k places, 8.6 MB) + `countries.tsv`, built by
+  `scripts/build-places.ts` from the GeoNames dump (CC-BY 4.0, attributed in README).
+  Towns of 1,000+ or admin seats everywhere; every named settlement in UA, PS, IL, LB, SY;
+  provinces/districts; seas and straits; airports, bases, ports, plants; notable islands
+  and regions. Coordinates are copied verbatim — DATA-2 still holds: nothing is computed,
+  and no model ever supplies a coordinate. Loaded by the worker only; the web bundle never
+  carries it and nothing is fetched at runtime (NFR-4/5).
+- **Amends the "curated coordinates only" rule (AGENTS.md invariant 8):** curated entries
+  still win on an exact match. GeoNames is consulted next, and only on an **exact** name
+  match, **inside the command's own countries** (`AOR_COUNTRIES`, current UCP), constrained
+  by the reported country. Out-of-theater land stays withheld, as before.
+- **Ambiguity is withheld, not guessed (AUTO-3):** a same-named rival of comparable size,
+  or a name shared by 3+ places (Ukraine's dozens of Oleksandrivkas) unless the top hit is
+  a 250k+ city by its own name → no index result (the country centroid / withheld path
+  applies). "Kursk region" / "Donetsk Oblast" resolve to the province, "20 km north of X"
+  to X at region precision only, "Port of X" is not an offset.
+- **Extractor:** a new `admin1` field (province/state/oblast) is the region-level fallback
+  before the country centroid, and the prompt now asks for the most specific place named.
+- **Dedup fix that this depends on:** the "same place" test treated two events on one
+  region-level anchor (a country centroid) as co-located, and a shared roundup URL then
+  merged unrelated stories ("US orders diplomats to depart Saudi Arabia" + "Houthi attack
+  on Saudi airport"). Region-precision coordinates no longer count as the same place, and
+  a shared URL merges country-level events only with title overlap >= 0.25.
+- **Issue window:** fresh events outside `[windowStart, now + 1h]` are dropped — no more
+  anniversary pieces published as new, no future-dated "events"; the extractor also clamps
+  occurredAt to the extraction time.
+- **Re-entry:** to revert to curated-only, stop passing `index` to `geolocate` in
+  `worker/src/extract.ts`. To refresh the table, re-run the build script on a new dump.
+- **Measured on the 1,000 stored events (place/country as extracted):** country-level
+  565 → 529, town-level 224 → 261, withheld 165 → 159. The bigger remaining lever is the
+  extractor only seeing headline + RSS summary, not article text.
+
 ## 2026-10-30 — X distribution thread; the corroboration gate survives a reload
 
 **Decision (Xavier):** post the open-source picture to X automatically and send readers

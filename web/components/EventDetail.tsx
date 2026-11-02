@@ -1,5 +1,6 @@
 "use client";
 
+import { factualUsImpact } from "@intel-os/core";
 import type { NumberedEvent } from "./TheaterMap";
 import { zulu } from "./TheaterView";
 
@@ -13,6 +14,8 @@ export default function EventCallout({
   onClose,
   onPrev,
   onNext,
+  onBack,
+  stepNoun = "EVENT",
 }: {
   event: NumberedEvent;
   color: string;
@@ -20,12 +23,23 @@ export default function EventCallout({
   onClose: () => void;
   onPrev: () => void;
   onNext: () => void;
+  /** Opened from a same-location list: return to it. */
+  onBack?: { label: string; go: () => void };
+  stepNoun?: string;
 }) {
   return (
     <div
       className="absolute top-[96px] left-3 z-20 w-[330px] max-w-[calc(100%-24px)] max-h-[calc(100%-152px)] overflow-y-auto bg-[#f5f2ea] border border-[#171712] shadow-xl"
       style={{ borderLeftWidth: 5, borderLeftColor: color }}
     >
+      {onBack && (
+        <button
+          onClick={onBack.go}
+          className="block w-full text-left px-4 pt-2 font-mono text-[9px] tracking-widest text-[#1f4e79] hover:underline"
+        >
+          ◂ {onBack.label}
+        </button>
+      )}
       {/* header */}
       <div className="flex items-start gap-3 px-4 pt-3">
         <span
@@ -50,10 +64,11 @@ export default function EventCallout({
         <p className="font-sans text-[13px] font-medium leading-snug mt-2">{event.title}</p>
         <p className="text-xs text-[#3a382e] mt-1.5 leading-relaxed">{event.summary}</p>
 
-        {event.usImpact && (
+        {/* AUTO-5: only a reported, direct effect; assessment-shaped lines are withheld */}
+        {factualUsImpact(event.usImpact) && (
           <div className="mt-2.5 border-t border-[#dcd6c4] pt-2">
             <span className="font-mono text-[9px] tracking-widest text-[#a02c2c]">US IMPACT </span>
-            <span className="text-[11px] leading-snug">{event.usImpact}</span>
+            <span className="text-[11px] leading-snug">{factualUsImpact(event.usImpact)}</span>
           </div>
         )}
 
@@ -95,10 +110,10 @@ export default function EventCallout({
       {/* prev / next stepping */}
       <div className="flex border-t border-[#171712] font-mono text-[10px]">
         <button onClick={onPrev} className="flex-1 py-1.5 hover:bg-[#eae4d2] border-r border-[#dcd6c4]">
-          ◂ PREV EVENT
+          ◂ PREV {stepNoun}
         </button>
         <button onClick={onNext} className="flex-1 py-1.5 hover:bg-[#eae4d2]">
-          NEXT EVENT ▸
+          NEXT {stepNoun} ▸
         </button>
       </div>
     </div>

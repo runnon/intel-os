@@ -1,0 +1,29 @@
+name: Picture freshness
+
+# Hourly check that every command published recently and its last ingest run succeeded
+# (/api/health → 200). A failed scheduled run makes GitHub email the repo's notification
+# recipients, so a missed cycle (like 2026-10-22's 36-hour gap) is noticed within hours
+# instead of days. No secrets needed: the probe is public and reveals no error detail.
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe /api/health
+        env:
+          HEALTH_URL: ${{ vars.HEALTH_URL || 'https://intel-os.org/api/health' }}
+        run: |
+          set -o pipefail
+          code=$(curl -sS -o body.json -w '%{http_code}' --retry 3 --retry-delay 20 --retry-all-errors "$HEALTH_URL" || true)
+          cat body.json || true
+          echo
+          if [ "$code" != "200" ]; then
+            echo "::error::Theater Picture is stale or failing (HTTP $code). See body above."
+            exit 1
+          fi
