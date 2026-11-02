@@ -63,7 +63,9 @@ Concretely, always verify:
    (`GAZETTEERS[aor]` in `packages/core/src/gazetteer.ts`) and its own regional
    feeds + GDELT query (`worker/src/feeds.ts`). Never geolocate one AOR's events
    against another's gazetteer, and never add a gazetteer entry with unverified
-   coordinates — an uncurated place correctly renders as "position withheld".
+   coordinates. Beyond the curated lists, places resolve only by exact name against
+   the bundled GeoNames table (`worker/data/`), inside the command's own countries
+   (`AOR_COUNTRIES`); ambiguous names stay "position withheld" (decision 2026-10-30).
 
 ## Verification steps (run, don't assume)
 
@@ -123,4 +125,8 @@ Vercel reserves AWS_* env names, so the web side uses BEDROCK_AWS_*.
   re-entry path if it amends the spec).
 - Update README's conformance map when requirement coverage changes.
 - Deploys: web = `vercel deploy --prod --yes` (project intel-os, rootDirectory=web);
-  worker = `railway up` (project intel-os, cron 0 */12 * * *).
+  worker = automatic on merge to main via `.github/workflows/deploy-worker.yml`
+  (`railway up`, project intel-os, cron 0 */12 * * *; needs the RAILWAY_TOKEN secret).
+  Each `ingest_runs` row records `code_version`; `unknown` means a hand deploy.
+- Health: `/api/health` is 503 when any command is >14 h stale or its last run failed;
+  `.github/workflows/staleness.yml` checks it hourly.

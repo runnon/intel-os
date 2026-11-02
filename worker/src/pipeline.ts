@@ -2,13 +2,15 @@ import type { Aor, IngestRunResult } from '@intel-os/core';
 import { buildSituationUpdate, dedupe, isCorroborated } from '@intel-os/core';
 import type { Article, FeedFetcher } from './feeds';
 import type { ExtractorFn } from './extract';
-import type { Store } from './store';
+import type { RunMeta, Store } from './store';
 
 export interface PipelineDeps {
   fetchFeeds: FeedFetcher;
   extract: ExtractorFn;
   store: Store;
   now?: () => Date;
+  /** cycle id / code version / source health, recorded with the run */
+  runMeta?: RunMeta;
 }
 
 const WINDOW_DAYS = 30; // events shown in an issue window
@@ -36,8 +38,15 @@ export async function runIngestOnce(aor: Aor, deps: PipelineDeps): Promise<Inges
     const windowStart = new Date(now.getTime() - WINDOW_DAYS * 86_400_000);
     const existing = await deps.store.loadRecentEvents(aor, windowStart.toISOString());
 
-    const { fresh, merged } = dedupe(candidates, existing);
-    dedupedCount = candidates.length - fresh.length;
+    // Only events inside this issue's window: anniversary pieces and re-reported old
+    // stories ("El-Fasher falls", a year on) are not new, and a future date is a slip.
+    // Out-of-window events would also never be compared against stored ones, so they
+    // re-entered every cycle.
+    const latest = new Date(now.getTime() + 3_600_000).toISOString();
+    const inWindow = candidates.filter((e) => e.occurredAt >= windowStart.toISOString() && e.occurredAt <= latest);
+
+    const { fresh, merged } = dedupe(inWindow, existing);
+    dedupedCount = inWindow.length - fresh.length;
 
     // Store everything — including social-only leads — so a lead persists and can
     // be corroborated by a news source in a later cycle.
@@ -67,14 +76,14 @@ export async function runIngestOnce(aor: Aor, deps: PipelineDeps): Promise<Inges
     });
 
     const issueId = await deps.store.publishIssue(issue, published);
-    await deps.store.recordRun({ aor, ok: true, fetched, extracted, deduped: dedupedCount, publishedIssue: issueId });
+    await deps.store.recordRun({ aor, ok: true, fetched, extracted, deduped: dedupedCount, publishedIssue: issueId, ...deps.runMeta });
 
     return { ok: true, fetched, extracted, deduped: dedupedCount, published: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     // AUTO-9: publish nothing, record the failure so it can alert
     try {
-      await deps.store.recordRun({ aor, ok: false, fetched, extracted, deduped: dedupedCount, error: message });
+      await deps.store.recordRun({ aor, ok: false, fetched, extracted, deduped: dedupedCount, error: message, ...deps.runMeta });
     } catch {
       // recording itself failed — surface the original error regardless
     }
