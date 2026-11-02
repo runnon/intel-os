@@ -36,8 +36,15 @@ export async function runIngestOnce(aor: Aor, deps: PipelineDeps): Promise<Inges
     const windowStart = new Date(now.getTime() - WINDOW_DAYS * 86_400_000);
     const existing = await deps.store.loadRecentEvents(aor, windowStart.toISOString());
 
-    const { fresh, merged } = dedupe(candidates, existing);
-    dedupedCount = candidates.length - fresh.length;
+    // Only events inside this issue's window: anniversary pieces and re-reported old
+    // stories ("El-Fasher falls", a year on) are not new, and a future date is a slip.
+    // Out-of-window events would also never be compared against stored ones, so they
+    // re-entered every cycle.
+    const latest = new Date(now.getTime() + 3_600_000).toISOString();
+    const inWindow = candidates.filter((e) => e.occurredAt >= windowStart.toISOString() && e.occurredAt <= latest);
+
+    const { fresh, merged } = dedupe(inWindow, existing);
+    dedupedCount = inWindow.length - fresh.length;
 
     // Store everything — including social-only leads — so a lead persists and can
     // be corroborated by a news source in a later cycle.

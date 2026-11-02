@@ -3,8 +3,10 @@ import type { AnthropicBedrock } from '@anthropic-ai/bedrock-sdk';
 import { makeModel } from './model';
 import { randomUUID } from 'node:crypto';
 import type { Aor, TheaterEvent } from '@intel-os/core';
+import type { PlaceIndex } from '@intel-os/core';
 import { GAZETTEERS, geolocate } from '@intel-os/core';
 import type { Article } from './feeds';
+import { loadPlaceIndex } from './places';
 
 /**
  * LLM extraction: article batch → candidate theater events.
@@ -27,7 +29,7 @@ const EVENT_SCHEMA = {
         additionalProperties: false,
         required: [
           'title', 'summary', 'occurredAt', 'category', 'affiliation',
-          'placeName', 'country', 'confOrigin', 'confActor', 'usForcesFlag',
+          'placeName', 'admin1', 'country', 'confOrigin', 'confActor', 'usForcesFlag',
           'usImpact', 'sourceUrls',
         ],
         properties: {
@@ -40,6 +42,7 @@ const EVENT_SCHEMA = {
             description: "Actor conducting the action relative to US forces. Contested, unclaimed, or single-belligerent-only attribution MUST be 'unknown' — never guess.",
           },
           placeName: { type: 'string' as const, description: 'The most specific named place OR named infrastructure/feature in the reporting — prefer a named facility over the surrounding city when both appear. Includes airports and air bases, seaports and naval bases, oil/gas pipelines, refineries and oil/LNG terminals, power plants and nuclear sites, dams, bridges, and straits/canals. Use the feature\'s common name (e.g. "East-West Pipeline", "Abqaiq", "Zaporizhzhia Nuclear Power Plant", "Kadena Air Base"). Empty string if none.' },
+          admin1: { type: 'string' as const, description: 'First-level administrative area the reporting names or clearly implies for this place — province, state, oblast, governorate, region (e.g. "Donetsk Oblast", "Khuzestan", "North Kivu", "Sinaloa"). Empty string if not stated.' },
           country: { type: 'string' as const, description: 'Country of the event, or empty string' },
           confOrigin: { enum: ['high', 'moderate', 'low'], description: 'Confidence in WHERE it happened, from source quality' },
           confActor: { enum: ['high', 'moderate', 'low'], description: 'Confidence in WHO did it' },
@@ -60,10 +63,23 @@ Rules:
 - Discard items that are not concrete events in the AOR (opinion pieces, background explainers, unrelated regions).
 - Attribution discipline: if the perpetrator is contested, unclaimed, or asserted only by one belligerent, affiliation is "unknown". "hostile" = forces adversarial to the US in this theater conducting an action; "friendly" = US/coalition action; "neutral" = third parties.
 - Confidence reflects sourcing: named officials/multiple outlets = high; single credible outlet = moderate; belligerent state media only = low.
-- occurredAt: use the reported event time; if only the publication date is known, use that.`;
+- occurredAt: use the reported event time; if only the publication date is known, use that. Never a future date: scheduled or announced-but-not-yet-happened items are not events.
+- placeName: the most specific place named anywhere in the item (village/town over district, district over province, a named facility over its town). Never put just the country in placeName when a smaller place is named.`;
+
+/** The GeoNames index is an enhancement: if its data is missing, extraction still
+ * runs on the curated gazetteers alone rather than failing the cycle. */
+function placeIndexOrNull(): PlaceIndex | null {
+  try {
+    return loadPlaceIndex();
+  } catch (e) {
+    console.warn(`[geo] place index unavailable, curated gazetteers only: ${e instanceof Error ? e.message : e}`);
+    return null;
+  }
+}
 
 export function makeClaudeExtractor(override?: { client: Anthropic | AnthropicBedrock; model: string }): ExtractorFn {
   const { client: anthropic, model } = override ?? makeModel();
+  const index = placeIndexOrNull();
   return async (articles, aor) => {
     if (articles.length === 0) return [];
     const batch = articles.slice(0, 150).map((a, i) =>
@@ -89,7 +105,11 @@ export function makeClaudeExtractor(override?: { client: Anthropic | AnthropicBe
     return parsed.events.map((e): TheaterEvent => {
       // No named place but a known country → geolocate the country itself so
       // the curated country centroid can plot it at region precision (DATA-3).
-      const geo = geolocate(e.placeName || e.country || '', e.country || undefined, GAZETTEERS[aor]);
+      const geo = geolocate(e.placeName || e.country || '', e.country || undefined, GAZETTEERS[aor], {
+        index: index ?? undefined,
+        aor,
+        admin1: e.admin1 || undefined,
+      });
       const sources = (e.sourceUrls ?? [])
         .map((url: string) => articles.find((a) => a.url === url))
         .filter(Boolean)
@@ -99,7 +119,7 @@ export function makeClaudeExtractor(override?: { client: Anthropic | AnthropicBe
         aor,
         title: e.title,
         summary: e.summary,
-        occurredAt: safeIso(e.occurredAt, now),
+        occurredAt: notAfter(safeIso(e.occurredAt, now), now),
         reportedAt: sources[0]?.publishedAt ?? now,
         category: e.category,
         affiliation: e.affiliation,
@@ -119,6 +139,12 @@ export function makeClaudeExtractor(override?: { client: Anthropic | AnthropicBe
       };
     }).filter((e) => e.sources.length > 0); // DATA-1: no source, no event
   };
+}
+
+/** An event can't have happened after we read about it: clamp model-reported
+ * future dates (scheduled items, year slips) to the extraction time. */
+export function notAfter(iso: string, limit: string): string {
+  return iso > limit ? limit : iso;
 }
 
 function safeIso(s: string, fallback: string): string {
