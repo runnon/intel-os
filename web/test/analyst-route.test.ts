@@ -175,6 +175,37 @@ describe("analyst route", () => {
     expect(MODEL_TIMEOUT_MS).toBeLessThan(120_000);
   });
 
+  it("explain mode answers in plain language about the theater on screen only", async () => {
+    mockIssueQuery([issue, { ...issue, aor: "EUCOM", serial: "SU-EUR-26-001", snapshot: [{ ...issue.snapshot[0], id: "eu-1", title: "Baltic event" }] }]);
+    const response = await POST(new Request("http://localhost/api/analyst", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ messages: [{ role: "user", content: "What's happening?" }], mode: "explain", aor: "CENTCOM" }),
+    }));
+
+    expect(response.status).toBe(200);
+    const payload = await response.json() as { text: string };
+    expect(payload.text).toContain(MARKING_LINE);
+    expect(payload.text).not.toContain(DRAFT_DISCLAIMER);
+    const modelRequest = mocks.createMessage.mock.calls[0][0];
+    expect(modelRequest.system).toContain("Plain language");
+    expect(modelRequest.system).toContain("Do not predict");
+    expect(modelRequest.max_tokens).toBe(1200);
+    expect(modelRequest.messages[0].content).toContain("link: /t/centcom?ev=event-1");
+    expect(modelRequest.messages[0].content).not.toContain("Baltic event");
+  });
+
+  it("explain mode still requires sign-in", async () => {
+    mocks.getAnalystUser.mockResolvedValue(null);
+    const response = await POST(new Request("http://localhost/api/analyst", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ messages: [{ role: "user", content: "Hi" }], mode: "explain", aor: "CENTCOM" }),
+    }));
+    expect(response.status).toBe(401);
+    expect(mocks.createMessage).not.toHaveBeenCalled();
+  });
+
   it("returns a retryable error when published data is unavailable", async () => {
     mockIssueQuery(null, new Error("database unavailable"));
 

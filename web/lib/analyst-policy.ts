@@ -55,3 +55,20 @@ export function enforceDraftMarkings(text: string): string {
   }
   return marked;
 }
+
+/** "explain" = the plain-language Ask panel on a theater page; "draft" = /analyst. */
+export type AnalystMode = "draft" | "explain";
+
+export function parseMode(body: unknown): { mode: AnalystMode; aor: string | null } {
+  const b = (body ?? {}) as { mode?: unknown; aor?: unknown };
+  const mode: AnalystMode = b.mode === "explain" ? "explain" : "draft";
+  const aor = typeof b.aor === "string" && /^[A-Z]{5,9}$/.test(b.aor) ? b.aor : null;
+  return { mode, aor };
+}
+
+/** Ask-panel answers carry the open-sources line (MARK-2/3) but not the long
+ * report-draft disclaimer, which the panel states once in its own header. */
+export function enforceExplainMarking(text: string): string {
+  const marked = text.trim();
+  return marked.includes(MARKING_LINE) ? marked : `${marked}\n\n---\n\n${MARKING_LINE}`;
+}
