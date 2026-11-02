@@ -11,9 +11,10 @@ describe("sign-in copy", () => {
 
   it("turns Supabase errors into plain next steps", () => {
     expect(friendlyAuthError(Object.assign(new Error("email rate limit exceeded"), { status: 429 }))).toMatch(/Wait a minute/);
-    expect(friendlyAuthError(new Error("Invalid login credentials"))).toMatch(/Email me a link/);
+    expect(friendlyAuthError(new Error("Invalid login credentials"))).toMatch(/Email me a code/);
     expect(friendlyAuthError(new Error("Email not confirmed"))).toMatch(/fresh one/);
     expect(friendlyAuthError(new Error("User already registered"))).toMatch(/already an account/);
+    expect(friendlyAuthError(new Error("Token has expired or is invalid"))).toMatch(/ask for a new code/);
     expect(friendlyAuthError(new Error("Something odd"))).toBe("Something odd");
   });
 });
