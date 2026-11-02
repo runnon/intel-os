@@ -308,28 +308,40 @@ export default function TheaterView({
               <span className="hidden sm:inline font-mono text-[10px]"> ({zulu(issue.info_cutoff)})</span>
             </span>
           </span>
-          <label className="flex items-center gap-1 text-[#6b675c]">
-            Region
-            <select
-              value={allTheaters ? "all" : issue.aor.toLowerCase()}
-              onChange={(e) => {
-                // keep the reader's time window and filters; a search and an event pick belong
-                // to the region they were made in
-                const qs = encodeView({ ...viewRef.current, selectedEvent: null, q: "" }).toString();
-                router.push(`/t/${e.target.value}${qs ? `?${qs}` : ""}`);
-              }}
-              className="bg-[#efeadb] border border-[#c9c2ac] px-1 py-0.5 text-[#171712]"
-            >
-              <option value="all">World</option>
-              {REGIONS.map((r) => (
-                <option key={r.aor} value={r.aor.toLowerCase()}>
-                  {r.region}
-                </option>
-              ))}
-            </select>
-          </label>
         </div>
       </header>
+
+      {/* Command tabs: switch region, keeping the reader's time window and filters (a search
+          and an event pick belong to the region they were made in). Scrolls sideways on phones. */}
+      <nav
+        aria-label="Switch command"
+        className="border-b border-[#c9c2ac] bg-[#f5f2ea] px-4 py-1.5 flex items-center gap-1 overflow-x-auto font-mono text-[11px] shrink-0"
+      >
+        {[{ code: "ALL", slug: "all", label: "World: every command" }, ...REGIONS.map((r) => ({ code: r.aor, slug: r.aor.toLowerCase(), label: `${r.region}: ${r.covers}` }))].map((t) => {
+          const current = allTheaters ? t.slug === "all" : t.code === issue.aor;
+          const qs = encodeView({ ...view, selectedEvent: null, q: "" }).toString();
+          return (
+            <a
+              key={t.slug}
+              href={`/t/${t.slug}${qs ? `?${qs}` : ""}`}
+              onClick={(e) => {
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+                e.preventDefault();
+                if (!current) router.push(`/t/${t.slug}${qs ? `?${qs}` : ""}`);
+              }}
+              title={t.label}
+              aria-current={current ? "page" : undefined}
+              className={`shrink-0 px-2 py-1 border tracking-wider ${
+                current
+                  ? "border-[#171712] bg-[#171712] text-[#f5f2ea]"
+                  : "border-[#c9c2ac] text-[#6b675c] hover:border-[#6b675c] hover:text-[#171712]"
+              }`}
+            >
+              {t.code}
+            </a>
+          );
+        })}
+      </nav>
 
       {/* Controls: search · time · more filters · community · count (wraps on phones) */}
       <div className="border-b border-[#c9c2ac] px-4 py-2 flex flex-wrap items-center gap-2 bg-[#efeadb] text-[12px] shrink-0">
