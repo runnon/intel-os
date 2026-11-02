@@ -37,14 +37,17 @@ export function friendlyAuthError(e: unknown): string {
   if (status === 429 || m.includes("rate limit") || m.includes("too many") || m.includes("security purposes")) {
     return "Too many emails were requested just now. Wait a minute and try again, or sign in with a password.";
   }
+  if (m.includes("token has expired") || m.includes("invalid token") || (m.includes("otp") && m.includes("invalid"))) {
+    return "That code didn't work. Check it against the latest email, or ask for a new code.";
+  }
   if (m.includes("invalid login credentials")) {
-    return "That email and password don't match. New here? Use \"Email me a link\" instead; it works for new accounts too.";
+    return "That email and password don't match. Forgot it, or new here? Use \"Email me a code\" instead; it works for new accounts too.";
   }
   if (m.includes("email not confirmed")) {
-    return "This account hasn't been confirmed yet. Use \"Email me a link\" and we'll send a fresh one.";
+    return "This account hasn't been confirmed yet. Use \"Email me a code\" and we'll send a fresh one.";
   }
   if (m.includes("already registered") || m.includes("already been registered")) {
-    return "There's already an account for this email. Sign in, or use \"Email me a link\".";
+    return "There's already an account for this email. Sign in, or use \"Email me a code\".";
   }
   if (m.includes("password") && (m.includes("weak") || m.includes("pwned") || m.includes("leaked") || m.includes("at least"))) {
     return "Choose a stronger password: at least eight characters, and not one that has appeared in a data breach.";

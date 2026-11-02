@@ -1,0 +1,23 @@
+# Production auth settings managed from the repo. Only what is declared here is pushed;
+# everything else stays as set on the project. Preview, then apply:
+#   supabase config diff --project-ref huhrdcxvdgmuvdgwymdj
+#   supabase config push --project-ref huhrdcxvdgmuvdgwymdj
+project_id = "intel-os"
+
+[auth]
+site_url = "https://intel-os.org"
+additional_redirect_urls = ["https://intel-os.org/auth/callback", "http://localhost:3000/auth/callback"]
+
+[auth.email]
+# Sign-in is a 6-digit code typed on the page (web/app/signin/page.tsx).
+otp_length = 6
+
+# signInWithOtp sends "magic_link" to existing users and "confirmation" to new ones;
+# both carry the same code.
+[auth.email.template.magic_link]
+subject = "Your Theater Picture sign-in code"
+content_path = "./supabase/templates/sign_in_code.html"
+
+[auth.email.template.confirmation]
+subject = "Your Theater Picture sign-in code"
+content_path = "./supabase/templates/sign_in_code.html"

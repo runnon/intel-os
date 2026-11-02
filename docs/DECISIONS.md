@@ -1,5 +1,31 @@
 # Decision Log
 
+## 2026-11-02 — Sign in with a typed 6-digit email code (the AlleyKat pattern)
+
+**What changed.** The sign-in page now asks for an email, sends a 6-digit code, and the
+reader types it on the page (`signInWithOtp` then `verifyOtp` type `email`). The same
+code signs in a returning reader and creates the account for a new one, so the separate
+"Create a password account" and "Reset your password" screens are gone; a password is
+still accepted for anyone who set one, and "Forgot it?" just sends a code.
+
+**Why.** Links break in ways readers can't fix: opened on another device, inside a mail
+app's own browser, or pre-opened by a mail scanner that uses up the one-time link. A
+typed code works anywhere. This is how AlleyKat (Runnon) signs people up.
+
+**Difference from AlleyKat.** AlleyKat first checks its profiles table to decide
+between a password screen and a sign-up screen. intel-os has no such table, and adding an
+anonymous "is this email registered?" lookup would let anyone test whether an address has
+an account, so everyone gets the code instead.
+
+**Config.** `supabase/config.toml` declares the auth settings managed from the repo
+(Site URL, redirect URLs, 6-digit codes, and the email template in
+`supabase/templates/sign_in_code.html` for both new and returning users). `supabase config
+push` changes only what that file declares. The template must go live together with the
+new page: the old page expects a link.
+
+**Re-entry.** To restore links, put `{{ .ConfirmationURL }}` back in the template; the
+`/auth/callback` route still handles links and Google.
+
 ## 2026-11-02 — Plain-language public map; opens on the last 3 days
 
 **Why:** simulated first-time users (two rounds of three personas on desktop and phone;

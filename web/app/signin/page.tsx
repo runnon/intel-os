@@ -6,12 +6,14 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { safeInternalPath } from "@/lib/safe-redirect";
 import { friendlyAuthError, signInReason } from "@/lib/auth-copy";
 
-// One field first: "email me a sign-in link" works for new and returning people
-// alike, so nobody has to pick "sign in" vs "create account" or remember a password.
-// Passwords stay available; Google appears automatically once enabled in Supabase.
-type Mode = "link" | "password" | "signup" | "recover" | "sent";
+// Email first, then a 6-digit code typed on this page (the AlleyKat/Runnon pattern).
+// The same code signs in a returning reader and creates the account for a new one, so
+// nobody chooses between "sign in" and "sign up", and there's no link to open in the
+// right browser. A password stays available for anyone who set one.
+type Mode = "email" | "code" | "password";
 
 const RESEND_SECONDS = 60;
+const CODE_LENGTH = 6;
 
 function SignInForm() {
   const searchParams = useSearchParams();
@@ -19,9 +21,9 @@ function SignInForm() {
   const callbackError = searchParams.get("error") === "link";
   const reason = signInReason(next);
 
-  const [mode, setMode] = useState<Mode>("link");
-  const [sentKind, setSentKind] = useState<"link" | "confirm" | "reset">("link");
+  const [mode, setMode] = useState<Mode>("email");
   const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,16 +67,27 @@ function SignInForm() {
     }
   }
 
-  const sendLink = () =>
+  const sendCode = () =>
     run(async () => {
       const { error: e } = await createSupabaseBrowserClient().auth.signInWithOtp({
         email: normalized(),
-        options: { emailRedirectTo: callback(), shouldCreateUser: true },
+        options: { shouldCreateUser: true, emailRedirectTo: callback() },
       });
       if (e) throw e;
-      setSentKind("link");
+      setCode("");
       setCooldown(RESEND_SECONDS);
-      setMode("sent");
+      setMode("code");
+    });
+
+  const checkCode = () =>
+    run(async () => {
+      const { error: e } = await createSupabaseBrowserClient().auth.verifyOtp({
+        email: normalized(),
+        token: code,
+        type: "email",
+      });
+      if (e) throw e;
+      window.location.assign(next);
     });
 
   const signInWithPassword = () =>
@@ -82,34 +95,6 @@ function SignInForm() {
       const { error: e } = await createSupabaseBrowserClient().auth.signInWithPassword({ email: normalized(), password });
       if (e) throw e;
       window.location.assign(next);
-    });
-
-  const signUp = () =>
-    run(async () => {
-      const { data, error: e } = await createSupabaseBrowserClient().auth.signUp({
-        email: normalized(),
-        password,
-        options: { emailRedirectTo: callback() },
-      });
-      if (e) throw e;
-      if (data.session) {
-        window.location.assign(next);
-        return;
-      }
-      setSentKind("confirm");
-      setCooldown(RESEND_SECONDS);
-      setMode("sent");
-    });
-
-  const recover = () =>
-    run(async () => {
-      const { error: e } = await createSupabaseBrowserClient().auth.resetPasswordForEmail(normalized(), {
-        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent("/reset-password")}`,
-      });
-      if (e) throw e;
-      setSentKind("reset");
-      setCooldown(RESEND_SECONDS);
-      setMode("sent");
     });
 
   const withGoogle = () =>
@@ -126,6 +111,7 @@ function SignInForm() {
   const primaryCls =
     "w-full bg-[#171712] text-white text-sm font-semibold py-2.5 hover:bg-[#0b0b3b] disabled:opacity-50";
   const linkCls = "text-xs underline text-[#6b675c] hover:text-[#8a6100]";
+  const errorLine = error && <p role="alert" className="text-xs text-[#8a2f2f] leading-snug">{error}</p>;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -135,45 +121,58 @@ function SignInForm() {
             // THEATER PICTURE
           </a>
 
-          {mode === "sent" ? (
-            <div className="mt-5" role="status">
+          {mode === "code" ? (
+            <form
+              className="mt-5 flex flex-col gap-3"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void checkCode();
+              }}
+            >
               <h1 className="headline text-2xl">Check your email</h1>
-              <p className="text-sm text-black/75 mt-2 leading-relaxed">
-                {sentKind === "reset" ? "We sent a password-reset link to " : sentKind === "confirm" ? "We sent a confirmation link to " : "We sent a sign-in link to "}
-                <strong className="break-all">{normalized()}</strong>.{" "}
-                {sentKind === "reset"
-                  ? "Open it to choose a new password."
-                  : `Open it in this browser and you'll be signed in and taken back to ${reason.place}.`}
+              <p className="text-sm text-black/75 leading-relaxed">
+                We sent a {CODE_LENGTH}-digit code to <strong className="break-all">{normalized()}</strong>. Type it here to
+                sign in.
               </p>
-              <ul className="mt-3 text-xs text-[#6b675c] space-y-1 list-disc pl-4">
-                <li>It can take a minute to arrive. Check spam or promotions.</li>
-                <li>Open the link on this same device and browser.</li>
-              </ul>
-              <div className="mt-5 flex flex-col gap-2">
-                <button
-                  type="button"
-                  disabled={busy || cooldown > 0}
-                  onClick={sentKind === "reset" ? recover : sentKind === "confirm" ? signUp : sendLink}
-                  className="w-full border border-[#171712] text-sm py-2 hover:bg-[#eae4d2] disabled:opacity-50"
-                >
-                  {cooldown > 0 ? `Resend in ${cooldown}s` : busy ? "Sending…" : "Resend email"}
+              <label className="text-xs font-mono text-[#514d43]">
+                Code
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  autoComplete="one-time-code"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={10}
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                  placeholder={"0".repeat(CODE_LENGTH)}
+                  className={`${inputCls} font-mono text-2xl tracking-[0.3em] text-center`}
+                />
+              </label>
+              <button type="submit" disabled={busy || code.length < CODE_LENGTH} className={primaryCls}>
+                {busy ? "Checking…" : "Sign in"}
+              </button>
+              {errorLine}
+              <p className="text-xs text-[#6b675c] leading-snug">
+                It can take a minute to arrive. Check spam or promotions. The code works on any device.
+              </p>
+              <div className="flex flex-col items-center gap-1.5 pt-1">
+                <button type="button" disabled={busy || cooldown > 0} onClick={sendCode} className={`${linkCls} disabled:no-underline disabled:opacity-60`}>
+                  {cooldown > 0 ? `Send a new code in ${cooldown}s` : "Send a new code"}
                 </button>
-                <button type="button" onClick={() => go("link")} className={linkCls}>
+                <button type="button" onClick={() => go("email")} className={linkCls}>
                   Use a different email
                 </button>
               </div>
-            </div>
+            </form>
           ) : (
             <>
               <p className="mt-4 font-mono text-[10px] text-[#8a6100]">FREE ACCOUNT</p>
-              <h1 className="headline text-2xl mt-1">
-                {mode === "recover" ? "Reset your password" : mode === "signup" ? "Create a password account" : reason.title}
-              </h1>
-              <p className="text-sm text-black/70 mt-2 leading-relaxed">
-                {mode === "recover" ? "Enter your account email and we'll send a reset link." : reason.why}
-              </p>
+              <h1 className="headline text-2xl mt-1">{reason.title}</h1>
+              <p className="text-sm text-black/70 mt-2 leading-relaxed">{reason.why}</p>
 
-              {google && mode !== "recover" && (
+              {google && (
                 <>
                   <button type="button" onClick={withGoogle} disabled={busy} className="mt-5 w-full border border-[#171712] bg-white text-sm py-2.5 hover:bg-[#eae4d2] disabled:opacity-50">
                     Continue with Google
@@ -187,9 +186,9 @@ function SignInForm() {
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  void (mode === "link" ? sendLink() : mode === "password" ? signInWithPassword() : mode === "signup" ? signUp() : recover());
+                  void (mode === "email" ? sendCode() : signInWithPassword());
                 }}
-                className={`${google && mode !== "recover" ? "" : "mt-5"} flex flex-col gap-3`}
+                className={`${google ? "" : "mt-5"} flex flex-col gap-3`}
               >
                 <label className="text-xs font-mono text-[#514d43]">
                   Email
@@ -206,63 +205,54 @@ function SignInForm() {
                   />
                 </label>
 
-                {(mode === "password" || mode === "signup") && (
+                {mode === "password" && (
                   <label className="text-xs font-mono text-[#514d43]">
                     Password
                     <input
                       type="password"
                       required
-                      minLength={mode === "signup" ? 8 : undefined}
-                      autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                      autoComplete="current-password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       className={inputCls}
                     />
-                    {mode === "signup" && <span className="mt-1 block text-[10px] text-[#6b675c]">At least eight characters.</span>}
                   </label>
                 )}
 
                 <button
                   type="submit"
-                  disabled={busy || !email.trim() || ((mode === "password" || mode === "signup") && (mode === "signup" ? password.length < 8 : !password))}
+                  disabled={busy || !email.trim() || (mode === "password" && !password)}
                   className={primaryCls}
                 >
-                  {busy
-                    ? "Working…"
-                    : mode === "link"
-                      ? "Email me a sign-in link"
-                      : mode === "password"
-                        ? "Sign in"
-                        : mode === "signup"
-                          ? "Create account"
-                          : "Send reset link"}
+                  {busy ? "Working…" : mode === "email" ? "Continue" : "Sign in"}
                 </button>
 
-                {error && <p role="alert" className="text-xs text-[#8a2f2f] leading-snug">{error}</p>}
+                {errorLine}
                 {!error && callbackError && (
                   <p role="alert" className="text-xs text-[#8a2f2f] leading-snug">
-                    That link didn&apos;t work. It may have expired, been used already, or been opened in a different browser.
-                    Enter your email to get a fresh one.
+                    That sign-in link didn&apos;t work. Enter your email and we&apos;ll send a code instead.
                   </p>
                 )}
 
-                <div className="flex flex-col items-center gap-1.5 pt-1">
-                  {mode === "link" && (
-                    <button type="button" onClick={() => go("password")} className={linkCls}>
+                {mode === "email" ? (
+                  <>
+                    <p className="text-xs text-[#6b675c] leading-snug">
+                      We&apos;ll email you a {CODE_LENGTH}-digit code. It works whether or not you have an account yet.
+                    </p>
+                    <button type="button" onClick={() => go("password")} className={`${linkCls} self-center pt-1`}>
                       Sign in with a password instead
                     </button>
-                  )}
-                  {mode === "password" && (
-                    <>
-                      <button type="button" onClick={() => go("recover")} className={linkCls}>Forgot password?</button>
-                      <button type="button" onClick={() => go("signup")} className={linkCls}>New here? Create a password account</button>
-                      <button type="button" onClick={() => go("link")} className={linkCls}>Email me a link instead</button>
-                    </>
-                  )}
-                  {(mode === "signup" || mode === "recover") && (
-                    <button type="button" onClick={() => go("link")} className={linkCls}>Back</button>
-                  )}
-                </div>
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center gap-1.5 pt-1">
+                    <button type="button" onClick={() => (email.trim() ? void sendCode() : go("email"))} className={linkCls}>
+                      Forgot it? Email me a code
+                    </button>
+                    <button type="button" onClick={() => go("email")} className={linkCls}>
+                      Back
+                    </button>
+                  </div>
+                )}
               </form>
               <p className="mt-5 text-[11px] text-[#918c7d] leading-snug">
                 We only use your email to sign you in. Open sources only · not an official government product.
