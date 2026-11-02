@@ -13,9 +13,12 @@ one host, so a link requested on one address and opened on another couldn't fini
 **What changed.** The www and vercel.app addresses now redirect to intel-os.org (pages
 only; `/api/*` is untouched because the Stripe webhook still posts to vercel.app). A
 sign-in code or token that lands on the home page is handed on to /auth/callback, so
-the Site URL fallback still signs people in. Supabase must list
-`https://intel-os.org/auth/callback` as a redirect URL and use `https://intel-os.org`
-as its Site URL (docs/STRIPE_SETUP.md §3); that part is dashboard configuration.
+the Site URL fallback still signs people in. Supabase now lists
+`https://intel-os.org/auth/callback` (and `http://localhost:3000/auth/callback`) as
+redirect URLs and uses `https://intel-os.org` as its Site URL; until 2026-11-02 the Site
+URL was still `http://localhost:3000` with an empty allow-list, so every link pointed at
+localhost. Set with `supabase config push` from a config.toml declaring only those two
+keys (push leaves undeclared settings alone); see docs/STRIPE_SETUP.md §3.
 
 **Re-entry.** If the canonical address changes, update `CANONICAL` in web/next.config.ts,
 the Supabase URL settings and worker/src/xpost.ts `SITE_URL` together.
