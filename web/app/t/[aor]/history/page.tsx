@@ -40,7 +40,7 @@ export default async function HistoryPage({ params }: PageProps<"/t/[aor]/histor
         <table className="w-full font-mono text-xs">
           <thead>
             <tr className="text-[#918c7d] text-left border-b border-[#c9c2ac]">
-              <th className="py-2 pr-4 font-normal">SERIAL</th>
+              <th className="py-2 pr-4 font-normal">ISSUE</th>
               <th className="py-2 pr-4 font-normal">INFO CUT-OFF</th>
               <th className="py-2 pr-4 font-normal">EVENTS</th>
               <th className="py-2 pr-4 font-normal">NEW</th>

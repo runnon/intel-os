@@ -103,8 +103,9 @@ export default function CommunityPanel({
           UNVERIFIED · COMMUNITY REPORTS
         </p>
         <p className="text-[11px] leading-snug text-[#514d43] mt-0.5">
-          Sent in by signed-in users, each with a public source link. Not checked by Theater Picture and never part of
-          the situation update. Open the source before you rely on it.
+          Sent in by users, each with a public link: a news story, or a public post on X, Telegram or similar. Not
+          checked by us and not part of the main map. Open the link before you rely on it. Your name and email are
+          never shown.
         </p>
       </div>
 

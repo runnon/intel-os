@@ -76,6 +76,9 @@ interface Props {
   // Several events at one exact position collapse into a single marker on the
   // interactive map; clicking it hands every id there (newest first) to this.
   onSelectStack?: (ids: string[]) => void;
+  // The stack opened from such a marker: its events are drawn one by one, fanned out
+  // around the spot with hairlines back to it, until it closes (null).
+  expandedIds?: string[] | null;
   // Report/export map: keep the WebGL frame so window.print() captures the map
   // (a default MapLibre canvas prints blank) and re-fit/redraw around printing.
   forExport?: boolean;
@@ -86,6 +89,13 @@ interface Props {
   // "All theaters" mode: events span every AOR, so start on a world view and skip the
   // per-AOR overlays (blocs/installations/infra) that key on a single command.
   allTheaters?: boolean;
+  // Interactive map: whenever this changes (new filters/search/window, or a "show all"
+  // press), re-fit the view to the events now plotted so results are never off-screen.
+  fitKey?: string;
+  // "Whole region": whenever this number changes, fit every plotted event in the issue
+  // (ignoring filters), so a reader can always get back to the overview.
+  overviewKey?: number;
+  overviewEvents?: NumberedEvent[];
   // Off-by-default community layer: unverified reports drawn as plain purple dots,
   // separate from (and beneath) the event symbols. Empty/undefined = layer off.
   community?: CommunityPoint[];
@@ -143,15 +153,24 @@ export default function TheaterMap({
   selectedId,
   onSelect,
   onSelectStack,
+  expandedIds = null,
   forExport = false,
   referenceEvents,
   allTheaters = false,
   community,
   selectedCommunityId = null,
   onSelectCommunity,
+  fitKey,
+  overviewKey,
+  overviewEvents,
 }: Props) {
   const onSelectStackRef = useRef(onSelectStack);
   onSelectStackRef.current = onSelectStack;
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
+  const expandKey = (expandedIds ?? []).join(",");
+  const expandedRef = useRef<Set<string>>(new Set());
+  expandedRef.current = new Set(expandedIds ?? []);
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const readyRef = useRef(false);
@@ -182,12 +201,19 @@ export default function TheaterMap({
       // window.print() / html-to-image captures a blank canvas (UX-5 export).
       // maplibre-gl v5 nests it under canvasContextAttributes.
       canvasContextAttributes: { preserveDrawingBuffer: forExport },
+      // Phones: the map sits in a scrolling page, so one finger scrolls the page and two
+      // move the map (MapLibre shows the hint). Wide screens keep normal map gestures.
+      cooperativeGestures: !forExport && window.matchMedia("(max-width: 767px)").matches,
+      // Map-data credit stays one tap away (OSM licence) without covering the map on phones.
+      attributionControl: { compact: true },
     });
     mapRef.current = map;
     (window as unknown as { __theaterMap?: maplibregl.Map }).__theaterMap = map;
     map.on("error", (e: maplibregl.ErrorEvent) => console.error("[theater-map]", e.error?.message ?? e));
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-left");
     map.addControl(new maplibregl.ScaleControl({ unit: "metric" }));
+    // A compact credit starts expanded; fold it to its (i) button so it doesn't sit on the map.
+    map.once("load", () => container.current?.querySelector(".maplibregl-ctrl-attrib")?.classList.remove("maplibregl-compact-show"));
 
     // Keep the canvas matched to its container (covers a container that gets its
     // size after mount, and the print reflow) so the map always fills its width.
@@ -368,7 +394,7 @@ export default function TheaterMap({
         id: "leaders",
         type: "line",
         source: "leaders",
-        paint: { "line-color": "rgba(23,23,18,0.5)", "line-width": 0.8 },
+        paint: { "line-color": "rgba(23,23,18,0.5)", "line-width": 0.8, "line-opacity": ["case", ["get", "dim"], 0.2, 1] },
       });
       map.addSource("truepoints", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
       map.addLayer({
@@ -380,6 +406,8 @@ export default function TheaterMap({
           "circle-color": "#171712",
           "circle-stroke-color": "#f5f2ea",
           "circle-stroke-width": 0.8,
+          "circle-opacity": ["case", ["get", "dim"], 0.2, 1],
+          "circle-stroke-opacity": ["case", ["get", "dim"], 0.2, 1],
         },
       });
 
@@ -391,6 +419,9 @@ export default function TheaterMap({
         id: "installation-symbols",
         type: "symbol",
         source: "installations",
+        // Interactive map: bases appear once zoomed in; at the overview first-time readers
+        // took them for events. The printed report keeps them at every zoom.
+        minzoom: forExport ? 0 : 5,
         layout: {
           "icon-image": ["get", "sidc"],
           "icon-size": 1,
@@ -433,6 +464,9 @@ export default function TheaterMap({
           "text-color": "#171712",
           "text-halo-color": "#f5f2ea",
           "text-halo-width": 1.2, // GEO-5: halo keeps labels legible over linework
+          // while a stack is open, everything outside it fades back
+          "icon-opacity": ["case", ["get", "dim"], 0.25, 1],
+          "text-opacity": ["case", ["get", "dim"], 0.25, 1],
         },
       });
       // serial number centered INSIDE the frame, proof-build style
@@ -449,6 +483,7 @@ export default function TheaterMap({
         },
         paint: {
           "text-color": "#171712",
+          "text-opacity": ["case", ["get", "dim"], 0.25, 1],
         },
       });
 
@@ -464,6 +499,8 @@ export default function TheaterMap({
           "circle-stroke-color": "#f5f2ea",
           "circle-stroke-width": 1.5,
           "circle-translate": [14, -14],
+          "circle-opacity": ["case", ["get", "dim"], 0.25, 1],
+          "circle-stroke-opacity": ["case", ["get", "dim"], 0.25, 1],
         },
       });
       map.addLayer({
@@ -479,7 +516,7 @@ export default function TheaterMap({
           "text-font": LABEL_FONT,
           "text-offset": [1.55, -1.55],
         },
-        paint: { "text-color": "#f5f2ea" },
+        paint: { "text-color": "#f5f2ea", "text-opacity": ["case", ["get", "dim"], 0.25, 1] },
       });
       // Community reports (unverified): small purple dots drawn over the event symbols
       // so they stay findable in dense theaters once someone turns the layer on.
@@ -524,7 +561,7 @@ export default function TheaterMap({
         const f = ev.features?.[0];
         const stack = f?.properties?.stack ? String(f.properties.stack).split(",") : [];
         if (stack.length > 1 && onSelectStackRef.current) onSelectStackRef.current(stack);
-        else if (f?.properties?.id) onSelect(String(f.properties.id));
+        else if (f?.properties?.id) onSelectRef.current(String(f.properties.id));
       });
       map.on("mouseenter", "event-symbols", () => (map.getCanvas().style.cursor = "pointer"));
       map.on("mouseleave", "event-symbols", () => (map.getCanvas().style.cursor = ""));
@@ -599,13 +636,13 @@ export default function TheaterMap({
       fitToContent(map, eventsRef.current, activeLines, false, forExport);
       // Register the symbol images, then lay out (declutter) at the fitted view.
       void ensureImages(map, eventsRef.current).then(() =>
-        relayout(map, eventsRef.current, layoutRef.current, !forExport, selectedIdRef.current),
+        relayout(map, eventsRef.current, layoutRef.current, !forExport, selectedIdRef.current, expandedRef.current),
       );
       // Interactive map: re-declutter whenever the view changes so icons stay
       // spread (with leaders) at every zoom, and return to true spots when zoomed in.
       if (!forExport) {
         map.on("moveend", () => {
-          if (readyRef.current) relayout(map, eventsRef.current, layoutRef.current, true, selectedIdRef.current);
+          if (readyRef.current) relayout(map, eventsRef.current, layoutRef.current, true, selectedIdRef.current, expandedRef.current);
         });
       }
     });
@@ -616,7 +653,7 @@ export default function TheaterMap({
       if (!readyRef.current) return;
       map.resize();
       fitToContent(map, eventsRef.current, referencedFor(refEventsRef.current), false, forExport);
-      relayout(map, eventsRef.current, layoutRef.current, !forExport, selectedIdRef.current);
+      relayout(map, eventsRef.current, layoutRef.current, !forExport, selectedIdRef.current, expandedRef.current);
       map.triggerRepaint();
     };
     const onAfterPrint = () => {
@@ -652,11 +689,59 @@ export default function TheaterMap({
     }
     if (forExport) fitToContent(map, events, referencedFor(referenceEvents ?? events), false, true);
     void ensureImages(map, events).then(() =>
-      relayout(map, events, layoutRef.current, !forExport, selectedIdRef.current),
+      relayout(map, events, layoutRef.current, !forExport, selectedIdRef.current, expandedRef.current),
     );
   }, [events, referenceEvents, forExport]);
 
-  // highlight ring on the selected icon (drawn identically whether the event was
+  // Open / close a stack: redraw it fanned out (or folded back), and when opening, move
+  // the map just enough that the whole fan sits clear of the docked list.
+  const lastExpandKey = useRef(expandKey);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !readyRef.current || forExport || expandKey === lastExpandKey.current) return;
+    lastExpandKey.current = expandKey;
+    relayout(map, eventsRef.current, layoutRef.current, true, selectedIdRef.current, expandedRef.current);
+    const members = eventsRef.current.filter((e) => expandedRef.current.has(e.id) && e.lat != null && e.lon != null);
+    if (members.length === 0) return;
+    const center: [number, number] = [members[0].lon!, members[0].lat!];
+    const p = map.project(center);
+    let r = 0;
+    for (const m of members) {
+      const q = map.project(layoutRef.current.get(m.id) ?? center);
+      r = Math.max(r, Math.hypot(q.x - p.x, q.y - p.y));
+    }
+    r += 24; // half an icon plus a margin
+    const canvas = map.getCanvas();
+    const h = canvas.clientHeight;
+    // Zoom in a little so the group stands apart from its neighbours (the fan itself
+    // keeps its on-screen size), and centre it in the part of the map the list leaves.
+    const zoom = Math.max(map.getZoom(), 6);
+    if (canvas.clientWidth < 768) {
+      // phones: the list is a bottom sheet over the lower ~45%
+      const targetY = Math.max(r + 8, h * 0.27);
+      map.easeTo({ center, zoom, duration: 500, offset: [0, Math.round(targetY - h / 2)] });
+    } else {
+      map.easeTo({ center, zoom, duration: 500, padding: { left: 372 } });
+    }
+  }, [expandKey, forExport]);
+
+  const lastOverviewKey = useRef(overviewKey);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !readyRef.current || overviewKey === lastOverviewKey.current) return;
+    lastOverviewKey.current = overviewKey;
+    fitToContent(map, (overviewEvents ?? eventsRef.current).filter((e) => e.lat != null && e.lon != null), [], true);
+  }, [overviewKey, overviewEvents]);
+
+  const lastFitKey = useRef(fitKey);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !readyRef.current || forExport || fitKey === lastFitKey.current) return;
+    lastFitKey.current = fitKey;
+    fitToContent(map, eventsRef.current, [], true);
+  }, [fitKey, forExport]);
+
+    // highlight ring on the selected icon (drawn identically whether the event was
   // picked on the map or in the side list) + recenter only when needed
   useEffect(() => {
     const map = mapRef.current;
@@ -680,6 +765,14 @@ export default function TheaterMap({
       const EDGE = 48;
       const CALLOUT_RIGHT = 350; // callout left(12) + width(330) + margin
       const offscreen = p.x < EDGE || p.x > w - EDGE || p.y < EDGE || p.y > h - EDGE;
+      // On phones the callout is a bottom sheet over the lower ~60%: keep the icon in
+      // the strip above it (offset, not padding, so later views aren't shifted).
+      if (w < 768) {
+        if (offscreen || p.y > h * 0.36) {
+          map.easeTo({ center: pos, duration: 500, offset: [0, -Math.round(h * 0.3)] });
+        }
+        return;
+      }
       const behindCallout = p.x < CALLOUT_RIGHT && p.y > 80 && p.y < h - 48;
       if (offscreen || behindCallout) {
         map.easeTo({ center: pos, zoom: Math.max(map.getZoom(), 5.6), duration: 500, padding: { left: 380 } });
@@ -893,6 +986,7 @@ function relayout(
   layout: Map<string, [number, number]>,
   withLeaders: boolean,
   selectedId: string | null,
+  expanded: Set<string> = new Set(),
 ) {
   const evSrc = map.getSource("events") as maplibregl.GeoJSONSource | undefined;
   if (!evSrc) return;
@@ -903,10 +997,11 @@ function relayout(
   const plotted = events.filter((e) => e.lat != null && e.lon != null);
   // Interactive map: events at one exact position become one marker (the newest
   // stands in, carrying the rest) instead of a honeycomb of dozens of symbols.
-  // The printed sheet can't be clicked, so it keeps every symbol.
+  // The printed sheet can't be clicked, so it keeps every symbol, and so does a stack
+  // the reader has opened (fanned out below).
   const stacks = new Map<string, NumberedEvent[]>();
   for (const e of plotted) {
-    const key = withLeaders ? `${e.lat!.toFixed(4)},${e.lon!.toFixed(4)}` : e.id;
+    const key = withLeaders && !expanded.has(e.id) ? `${e.lat!.toFixed(4)},${e.lon!.toFixed(4)}` : e.id;
     (stacks.get(key) ?? stacks.set(key, []).get(key)!).push(e);
   }
   const members = new Map<string, NumberedEvent[]>();
@@ -915,9 +1010,26 @@ function relayout(
     members.set(group[0].id, group);
     return group[0];
   });
+  // An opened stack starts as a ring (or a spiral, for many) around its spot, newest at
+  // the top, so the declutter below only has to nudge it clear of its neighbours.
+  const fan = new Map<string, [number, number]>();
+  if (withLeaders && expanded.size > 0) {
+    const opened = new Map<string, NumberedEvent[]>();
+    for (const e of shown) {
+      if (!expanded.has(e.id)) continue;
+      const key = `${e.lat!.toFixed(4)},${e.lon!.toFixed(4)}`;
+      (opened.get(key) ?? opened.set(key, []).get(key)!).push(e);
+    }
+    for (const group of opened.values()) {
+      if (group.length < 2) continue;
+      const offsets = fanOffsets(group.length);
+      group.forEach((e, i) => fan.set(e.id, offsets[i]));
+    }
+  }
   const pts = shown.map((e, i) => {
     const p = map.project([e.lon!, e.lat!]);
-    return { e, tx: p.x, ty: p.y, x: p.x, y: p.y, i };
+    const [ox, oy] = fan.get(e.id) ?? [0, 0];
+    return { e, tx: p.x, ty: p.y, x: p.x + ox, y: p.y + oy, i };
   });
 
   for (let iter = 0; iter < 120; iter++) {
@@ -956,6 +1068,7 @@ function relayout(
     const coord: [number, number] = [disp.lng, disp.lat];
     const group = members.get(pt.e.id) ?? [pt.e];
     for (const m of group) layout.set(m.id, coord);
+    const dim = withLeaders && expanded.size > 0 && !expanded.has(pt.e.id);
     evFeatures.push({
       type: "Feature",
       geometry: { type: "Point", coordinates: coord },
@@ -966,6 +1079,7 @@ function relayout(
         place: pt.e.placeName,
         count: group.length,
         stack: group.map((m) => m.id).join(","),
+        dim,
       },
     });
     if (withLeaders && Math.hypot(pt.x - pt.tx, pt.y - pt.ty) > 4) {
@@ -973,9 +1087,9 @@ function relayout(
       leaderFeatures.push({
         type: "Feature",
         geometry: { type: "LineString", coordinates: [[t.lng, t.lat], coord] },
-        properties: {},
+        properties: { dim },
       });
-      trueFeatures.push({ type: "Feature", geometry: { type: "Point", coordinates: [t.lng, t.lat] }, properties: {} });
+      trueFeatures.push({ type: "Feature", geometry: { type: "Point", coordinates: [t.lng, t.lat] }, properties: { dim } });
     }
   }
   evSrc.setData({ type: "FeatureCollection", features: evFeatures });
@@ -993,6 +1107,28 @@ function relayout(
       });
     }
   }
+}
+
+/** Screen offsets (px) for n symbols fanned out around one spot: a ring for a few, an
+ * evenly spaced spiral for more, so neighbouring symbols never touch. */
+function fanOffsets(n: number): [number, number][] {
+  const gap = ICON_MIN_PX + 4;
+  if (n <= 8) {
+    const r = Math.max(gap, (n * gap) / (2 * Math.PI));
+    return Array.from({ length: n }, (_, i) => {
+      const a = (2 * Math.PI * i) / n - Math.PI / 2;
+      return [r * Math.cos(a), r * Math.sin(a)];
+    });
+  }
+  const out: [number, number][] = [];
+  let r = gap;
+  let a = -Math.PI / 2;
+  for (let i = 0; i < n; i++) {
+    out.push([r * Math.cos(a), r * Math.sin(a)]);
+    a += gap / r;
+    r += (gap * gap) / (2 * Math.PI * r);
+  }
+  return out;
 }
 
 /** Frame the map to contain plotted events plus any referenced route geometry.

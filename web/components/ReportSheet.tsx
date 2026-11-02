@@ -5,6 +5,9 @@ import { useSearchParams } from "next/navigation";
 import { IDENTITY_COLOR_LIGHT, factualUsImpact } from "@intel-os/core";
 import type { IssueRow } from "@/lib/db";
 import { applyView, decodeView } from "@/lib/urlState";
+import { regionName } from "@/lib/regions";
+import { plainUtc } from "@/lib/age";
+import { AFF_PLAIN } from "@/lib/plain";
 import TheaterMap, { type NumberedEvent } from "./TheaterMap";
 import { zulu } from "./TheaterView";
 
@@ -42,8 +45,8 @@ function ReportPage({
       <Banner />
       <div className="report-page__body flex flex-col px-8 py-4">{children}</div>
       <div className="shrink-0 flex items-center justify-between px-6 pb-1 font-mono text-[8px] text-black/45">
-        <span>{serial}</span>
-        <span>PAGE {pageNo} OF {pageCount}</span>
+        <span>Theater Picture · independent open-source project · issue {serial}</span>
+        <span>Page {pageNo} of {pageCount}</span>
       </div>
       <Banner />
     </div>
@@ -101,7 +104,12 @@ export default function ReportSheet({ issue, backHref }: { issue: IssueRow; back
     [events, view, issue.info_cutoff],
   );
   const plottable = filtered.filter((e) => e.lat != null && e.lon != null);
-  const dateRange = `${zulu(issue.window_start)} – ${zulu(issue.info_cutoff)}`;
+  // The range printed is the window on screen, not the whole issue window.
+  const rangeStart =
+    view.windowHours == null
+      ? issue.window_start
+      : new Date(new Date(issue.info_cutoff).getTime() - view.windowHours * 3_600_000).toISOString();
+  const dateRange = `${zulu(rangeStart)} – ${zulu(issue.info_cutoff)}`;
 
   // Content-aware pagination: measure each rendered card, then pack whole rows
   // (4 cards) onto a page until the next row wouldn't fit — so nothing is
@@ -175,23 +183,24 @@ export default function ReportSheet({ issue, backHref }: { issue: IssueRow; back
       <ReportPage pageNo={nextPage()} pageCount={pageCount} serial={issue.serial}>
         <div className="flex flex-wrap justify-between gap-4 border-b-2 border-[#171712] pb-2 shrink-0">
           <div className="max-w-xl">
-            <p className="font-mono text-[10px] tracking-[0.25em] text-black/60">
-              SITUATION UPDATE PRODUCT · {issue.aor} · GRAPHIC · MACHINE-ASSEMBLED
+            <p className="font-mono text-[10px] tracking-[0.2em] text-black/60">
+              THEATER PICTURE · INDEPENDENT OPEN-SOURCE PROJECT · GENERATED AUTOMATICALLY
             </p>
-            <h1 className="headline text-3xl mt-0.5">{issue.aor} THEATER PICTURE</h1>
-            <p className="font-mono text-xs mt-0.5 text-black/70">REPORTED EVENTS, {dateRange}</p>
+            <h1 className="headline text-3xl mt-0.5">{regionName(issue.aor)}: reported events</h1>
+            <p className="font-mono text-xs mt-0.5 text-black/70">
+              {dateRange} · {issue.aor} area{view.q.trim() ? ` · search: “${view.q.trim()}”` : ""}
+            </p>
           </div>
           <table className="font-mono text-[10px] self-start">
             <tbody>
               {(
                 [
-                  ["SERIAL", issue.serial],
-                  ["INFO CUT-OFF", zulu(issue.info_cutoff)],
-                  ["PUBLISHED", zulu(issue.published_at)],
-                  ["EVENTS SHOWN", `${filtered.length} (${plottable.length} plotted)`],
-                  ["SOURCE BASIS", "OSINT only"],
-                  ["PREPARED BY", "Unattended pipeline — no analyst"],
-                  ["DISTRIBUTION", "Approved for public release"],
+                  ["Information as of", `${plainUtc(issue.info_cutoff)} (${zulu(issue.info_cutoff)})`],
+                  ["Published", plainUtc(issue.published_at)],
+                  ["Events shown", `${filtered.length} (${plottable.length} on the map)`],
+                  ["Sources", "Public news reports and social media only"],
+                  ["Prepared by", "Software, automatically — no person reviewed it"],
+                  ["Made by", "Theater Picture, an independent open-source project (github.com/runnon/intel-os)"],
                 ] as const
               ).map(([k, v]) => (
                 <tr key={k}>
@@ -204,10 +213,9 @@ export default function ReportSheet({ issue, backHref }: { issue: IssueRow; back
         </div>
 
         <div className="border border-black/20 bg-[#ece8db] px-3 py-1.5 mt-2 font-mono text-[9px] leading-snug shrink-0">
-          This sheet is generated unattended from publicly available reporting. It contains
-          reported facts only — no key judgements, no assessment, and no analysis of alternatives.
-          Judgement publishes solely in a separately signed assessment product over a named
-          analyst&apos;s signature. No such product accompanies this issue.
+          Generated automatically from publicly available reporting. Reported facts only: no
+          assessments, opinions or predictions. Not produced, reviewed or endorsed by any
+          government or military. Check the linked sources before relying on any event.
         </div>
 
         <div className="report-map relative w-full flex-1 min-h-0 mt-2 border border-black/25">
@@ -220,10 +228,10 @@ export default function ReportSheet({ issue, backHref }: { issue: IssueRow; back
             <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-4">
               {(
                 [
-                  ["hostile", "Hostile action"],
-                  ["friendly", "Friendly / US action"],
-                  ["neutral", "Neutral / third party"],
-                  ["unknown", "Unknown / contested"],
+                  ["hostile", AFF_PLAIN.hostile.long],
+                  ["friendly", AFF_PLAIN.friendly.long],
+                  ["neutral", AFF_PLAIN.neutral.long],
+                  ["unknown", AFF_PLAIN.unknown.long],
                 ] as const
               ).map(([key, label]) => (
                 <div key={label} className="flex items-center gap-2.5">
@@ -245,14 +253,13 @@ export default function ReportSheet({ issue, backHref }: { issue: IssueRow; back
             </div>
           </div>
           <div>
-            <h4 className="font-mono text-[9px] tracking-widest text-black/60">METHODOLOGY</h4>
+            <h4 className="font-mono text-[9px] tracking-widest text-black/60">HOW TO READ THIS MAP</h4>
             <p className="font-mono text-[8px] text-black/55 mt-1 leading-snug">
-              Numbered points are events, chronological within the issue window; closely co-located
-              symbols are slightly displaced for legibility, true positions kept in the data.
-              Positions derive from place names validated against a curated gazetteer; events below
-              the geolocation confidence threshold are listed in the register without a plotted
-              point. Named pipelines use public mapped alignments; maritime routes follow a public
-              shipping network and are representative corridors, not live vessel tracks.
+              Each numbered symbol is one event, numbered oldest to newest. Symbols that would overlap
+              are nudged apart; the true positions are kept in the data. Places come from the names in
+              the reporting, checked against a list of known places. Events whose place couldn&apos;t be
+              pinned down are listed without a map point. Pipelines follow public maps; shipping lanes
+              are typical routes, not live ship tracks.
             </p>
           </div>
         </div>
@@ -262,9 +269,9 @@ export default function ReportSheet({ issue, backHref }: { issue: IssueRow; back
       {pages.map((chunkEvents, i) => (
         <ReportPage key={i} pageNo={nextPage()} pageCount={pageCount} serial={issue.serial}>
           <div className="flex items-baseline justify-between border-b-2 border-[#171712] pb-1 shrink-0">
-            <h2 className="headline text-lg">Event Register{pages.length > 1 ? ` — ${i + 1}/${pages.length}` : ""}</h2>
+            <h2 className="headline text-lg">Events{pages.length > 1 ? ` — ${i + 1}/${pages.length}` : ""}</h2>
             <span className="font-mono text-[10px] text-black/55">
-              {issue.serial} · {filtered.length} EVENTS · INFO CUT-OFF {zulu(issue.info_cutoff)}
+              {regionName(issue.aor)} · {filtered.length} events · information as of {zulu(issue.info_cutoff)}
             </span>
           </div>
           <div className="grid grid-cols-4 gap-1.5 mt-2 content-start">
@@ -278,12 +285,12 @@ export default function ReportSheet({ issue, backHref }: { issue: IssueRow; back
       {/* ---- SUMMARY page: change log + sources ---- */}
       <ReportPage pageNo={nextPage()} pageCount={pageCount} serial={issue.serial}>
         <div className="flex items-baseline justify-between border-b-2 border-[#171712] pb-1 shrink-0">
-          <h2 className="headline text-lg">Change &amp; Sourcing</h2>
-          <span className="font-mono text-[10px] text-black/55">{issue.serial}</span>
+          <h2 className="headline text-lg">What changed &amp; where it came from</h2>
+          <span className="font-mono text-[10px] text-black/55">{regionName(issue.aor)}</span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
           <div className="border border-black/20 p-3">
-            <h4 className="font-mono text-[10px] tracking-widest text-black/60">CHANGE FROM PREVIOUS ISSUE</h4>
+            <h4 className="font-mono text-[10px] tracking-widest text-black/60">CHANGED SINCE THE PREVIOUS UPDATE</h4>
             {issue.change_log?.length ? (
               <ul className="mt-1.5 space-y-0.5 text-[10px] font-mono">
                 {issue.change_log.slice(0, 16).map((c, i) => (
@@ -295,18 +302,17 @@ export default function ReportSheet({ issue, backHref }: { issue: IssueRow; back
               </ul>
             ) : (
               <p className="mt-1.5 text-[10px] font-mono">
-                No change — reporting produced no new or revised events this cycle. A no-change
-                issue is a product; silence is a fault.
+                No new or changed events since the previous update.
               </p>
             )}
           </div>
           <div className="border border-black/20 p-3">
-            <h4 className="font-mono text-[10px] tracking-widest text-black/60">SOURCE SUMMARY STATEMENT</h4>
+            <h4 className="font-mono text-[10px] tracking-widest text-black/60">SOURCES</h4>
             <p className="mt-1.5 text-[10px] leading-relaxed">{issue.source_summary?.statement}</p>
           </div>
         </div>
         <p className="font-mono text-[9px] text-black/50 mt-4">
-          {issue.disclaimer} · {issue.serial} · Info cut-off {zulu(issue.info_cutoff)}
+          {issue.disclaimer} · Information as of {zulu(issue.info_cutoff)}
         </p>
       </ReportPage>
     </div>

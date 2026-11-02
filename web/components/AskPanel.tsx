@@ -2,15 +2,8 @@
 
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import Markdown from "./Markdown";
+import When from "./When";
 import { requestAnalystDraft, type AnalystMessage } from "@/lib/analyst-client";
-
-// "30 Oct 2026, 12:01 UTC" — a plain date for a general reader (no DTG).
-function asOf(iso: string): string {
-  const d = new Date(iso);
-  const p = (n: number) => String(n).padStart(2, "0");
-  const month = d.toLocaleString("en-US", { month: "short", timeZone: "UTC" });
-  return `${d.getUTCDate()} ${month} ${d.getUTCFullYear()}, ${p(d.getUTCHours())}:${p(d.getUTCMinutes())} UTC`;
-}
 
 // Plain-language Q&A over the theater on screen (signed-in users; each question is a
 // model call). Answers cite events as /t/<aor>?ev=<id> links, which select the event
@@ -47,7 +40,7 @@ export default function AskPanel({
   }, [messages, busy]);
 
   const suggestions = [
-    `What's happening in ${aor} right now?`,
+    "What's happening here right now?",
     "What changed in the last 24 hours?",
     "Is anything directly affecting US forces?",
   ];
@@ -88,14 +81,20 @@ export default function AskPanel({
   return (
     <div className="flex flex-col flex-1 min-h-0">
       <p className="px-4 py-2 text-[11px] leading-snug text-[#6b675c] border-b border-[#e3ddcc] shrink-0">
-        AI answers from this page&apos;s published reporting (as of {asOf(cutoffIso)}). Facts only, no predictions or assessment;
+        AI answers from this page&apos;s published reporting (as of <When iso={cutoffIso} ago={false} />). Facts only, no predictions or assessment;
         check the linked sources.
       </p>
 
       {signedIn === false ? (
         <div className="p-4 space-y-3">
           <p className="text-sm leading-snug">
-            Ask questions about {aor} in plain language and get answers linked to the events on the map.
+            Ask about this map in plain English and get an answer that links to the events it used.
+          </p>
+          <p className="text-[12px] text-[#514d43] italic">
+            For example: {suggestions.map((q) => `“${q}”`).join("  ")}
+          </p>
+          <p className="text-[12px] text-[#6b675c] leading-snug">
+            It only knows what is on this map. It won&apos;t predict what happens next or give safety or travel advice.
           </p>
           <a
             href={`/signin?next=${encodeURIComponent(next + "?tab=ask")}`}
@@ -147,7 +146,7 @@ export default function AskPanel({
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={`Ask about ${aor}…`}
+              placeholder="Ask a question about this map…"
               aria-label={`Ask a question about ${aor}`}
               maxLength={2000}
               className="flex-1 min-w-0 px-3 py-2 text-[13px] bg-transparent outline-none"
