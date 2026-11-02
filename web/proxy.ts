@@ -1,11 +1,17 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { authLandingRedirect } from "@/lib/auth-landing";
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
 // Refreshes the Supabase auth session on every request and writes the rotated
 // cookies back onto the response, so server components/route handlers see a live user.
 export async function proxy(request: NextRequest) {
+  // A sign-in link that Supabase sent to the Site URL instead of /auth/callback (its
+  // fallback when the requested return address isn't on its allow-list) still signs in.
+  const landing = authLandingRedirect(request.nextUrl);
+  if (landing) return NextResponse.redirect(landing);
+
   let response = NextResponse.next({ request });
 
   // Anonymous map traffic has no session to refresh. Keeping it off the auth
@@ -42,5 +48,5 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   // Only routes that can consume or refresh an authenticated entitlement.
-  matcher: ["/t/:path*", "/i/:path*", "/analyst/:path*", "/signin", "/reset-password", "/auth/:path*", "/api/analyst", "/api/access/:path*", "/api/entitlement", "/api/pricing", "/api/stripe/:path*"],
+  matcher: ["/", "/t/:path*", "/i/:path*", "/analyst/:path*", "/signin", "/reset-password", "/auth/:path*", "/api/analyst", "/api/access/:path*", "/api/entitlement", "/api/pricing", "/api/stripe/:path*"],
 };

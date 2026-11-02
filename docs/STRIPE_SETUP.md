@@ -33,9 +33,9 @@ Auth → Providers → Email: enable email/password sign-up and require email co
 Set a minimum password length of at least eight characters, enable leaked-password
 protection when available, and configure production SMTP rather than relying on the
 rate-limited default sender. Under Auth → URL Configuration set Site URL to the
-production origin and add redirect URLs:
-`https://intel-os-self.vercel.app/auth/callback` (and `http://localhost:3000/auth/callback`
-for dev). Verify sign-up confirmation and password-reset delivery before launch.
+production origin, `https://intel-os.org`, and add redirect URLs:
+`https://intel-os.org/auth/callback` (and `http://localhost:3000/auth/callback` for dev).
+The www and vercel.app addresses redirect to intel-os.org, so they don't need entries. Verify sign-up confirmation and password-reset delivery before launch.
 
 ### 4. Stripe — restricted key
 Use a temporary restricted setup key with write access to **Products** and **Prices** for
