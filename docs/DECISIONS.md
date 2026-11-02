@@ -1,5 +1,25 @@
 # Decision Log
 
+## 2026-11-02 — One public address (intel-os.org) so email sign-in links work
+
+**What broke.** The site answered on three addresses (intel-os.org, www.intel-os.org,
+intel-os-self.vercel.app), and Supabase's redirect allow-list named only the vercel.app
+one. A sign-in link requested on intel-os.org asked to come back to
+intel-os.org/auth/callback; Supabase refused that and sent the reader to its Site URL
+instead, so the code was dropped and nobody got signed in (no request reached
+/auth/callback on intel-os.org for days). Even when a link did land, cookies belong to
+one host, so a link requested on one address and opened on another couldn't finish.
+
+**What changed.** The www and vercel.app addresses now redirect to intel-os.org (pages
+only; `/api/*` is untouched because the Stripe webhook still posts to vercel.app). A
+sign-in code or token that lands on the home page is handed on to /auth/callback, so
+the Site URL fallback still signs people in. Supabase must list
+`https://intel-os.org/auth/callback` as a redirect URL and use `https://intel-os.org`
+as its Site URL (docs/STRIPE_SETUP.md §3); that part is dashboard configuration.
+
+**Re-entry.** If the canonical address changes, update `CANONICAL` in web/next.config.ts,
+the Supabase URL settings and worker/src/xpost.ts `SITE_URL` together.
+
 ## 2026-10-30 — Community reports layer: user submissions beside, never inside, the picture
 
 **Decision (Xavier):** let signed-in people send in events they have seen in public

@@ -8,7 +8,7 @@ non-negotiables; the human maintainer should not have to re-check them.
 
 An open-source (MIT) situational-awareness system: unattended 12-hour OSINT ingest →
 immutable, serial-addressable situation updates → public MapLibre theater view with
-MIL-STD-2525E symbology. Live: https://intel-os-self.vercel.app. Governance is plain
+MIL-STD-2525E symbology. Live: https://intel-os.org. Governance is plain
 GitHub (issues/PRs). Requirement IDs (AUTO-*, DATA-*, UX-*, ANL-*, GEO-*, MARK-*,
 NFR-*) come from the product spec; the conformance map is in README.md.
 
