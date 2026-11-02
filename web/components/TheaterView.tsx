@@ -653,7 +653,7 @@ export default function TheaterView({
         <span className="hidden sm:inline">Symbols follow the US/NATO military map standard (MIL-STD-2525E).</span>
         {!allTheaters && (
           <a href={`/t/${issue.aor.toLowerCase()}/history`} className="underline hover:text-[#171712]">
-            Past updates ({issue.serial})
+            Past updates
           </a>
         )}
       </footer>
