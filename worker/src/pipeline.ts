@@ -2,13 +2,15 @@ import type { Aor, IngestRunResult } from '@intel-os/core';
 import { buildSituationUpdate, dedupe, isCorroborated } from '@intel-os/core';
 import type { Article, FeedFetcher } from './feeds';
 import type { ExtractorFn } from './extract';
-import type { Store } from './store';
+import type { RunMeta, Store } from './store';
 
 export interface PipelineDeps {
   fetchFeeds: FeedFetcher;
   extract: ExtractorFn;
   store: Store;
   now?: () => Date;
+  /** cycle id / code version / source health, recorded with the run */
+  runMeta?: RunMeta;
 }
 
 const WINDOW_DAYS = 30; // events shown in an issue window
@@ -74,14 +76,14 @@ export async function runIngestOnce(aor: Aor, deps: PipelineDeps): Promise<Inges
     });
 
     const issueId = await deps.store.publishIssue(issue, published);
-    await deps.store.recordRun({ aor, ok: true, fetched, extracted, deduped: dedupedCount, publishedIssue: issueId });
+    await deps.store.recordRun({ aor, ok: true, fetched, extracted, deduped: dedupedCount, publishedIssue: issueId, ...deps.runMeta });
 
     return { ok: true, fetched, extracted, deduped: dedupedCount, published: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     // AUTO-9: publish nothing, record the failure so it can alert
     try {
-      await deps.store.recordRun({ aor, ok: false, fetched, extracted, deduped: dedupedCount, error: message });
+      await deps.store.recordRun({ aor, ok: false, fetched, extracted, deduped: dedupedCount, error: message, ...deps.runMeta });
     } catch {
       // recording itself failed — surface the original error regardless
     }

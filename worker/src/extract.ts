@@ -4,7 +4,7 @@ import { makeModel } from './model';
 import { randomUUID } from 'node:crypto';
 import type { Aor, TheaterEvent } from '@intel-os/core';
 import type { PlaceIndex } from '@intel-os/core';
-import { GAZETTEERS, geolocate } from '@intel-os/core';
+import { GAZETTEERS, factualUsImpact, geolocate } from '@intel-os/core';
 import type { Article } from './feeds';
 import { loadPlaceIndex } from './places';
 
@@ -47,7 +47,7 @@ const EVENT_SCHEMA = {
           confOrigin: { enum: ['high', 'moderate', 'low'], description: 'Confidence in WHERE it happened, from source quality' },
           confActor: { enum: ['high', 'moderate', 'low'], description: 'Confidence in WHO did it' },
           usForcesFlag: { type: 'boolean' as const, description: 'True if US personnel, bases, aircraft, ships, or infrastructure are directly threatened or affected' },
-          usImpact: { type: 'string' as const, description: 'One sentence on impact to US operations, or empty string' },
+          usImpact: { type: 'string' as const, description: 'One plain sentence stating a DIRECT effect on US forces, bases, personnel or operations that a source REPORTS (e.g. "Two US service members were wounded.", "Flights at Al Udeid were suspended."). Facts only: no significance, consequence, risk, threat level, or what it could/will mean. Empty string if no source reports a direct effect.' },
           sourceUrls: { type: 'array' as const, items: { type: 'string' as const }, description: 'URLs of the input articles this event derives from' },
         },
       },
@@ -133,7 +133,7 @@ export function makeClaudeExtractor(override?: { client: Anthropic | AnthropicBe
         confOrigin: e.confOrigin,
         confActor: e.confActor,
         usForcesFlag: e.usForcesFlag,
-        usImpact: e.usImpact || undefined,
+        usImpact: factualUsImpact(e.usImpact), // AUTO-5: withhold assessment-shaped lines
         sources: sources.length > 0 ? sources : [],
         revisions: [],
       };

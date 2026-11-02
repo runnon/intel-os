@@ -1,3 +1,4 @@
+import { factualUsImpact } from "@intel-os/core";
 import { makeModel } from "@/lib/model";
 import { NextResponse } from "next/server";
 import { consumeAnalystQuota, getAnalystUser } from "@/lib/entitlement";
@@ -129,7 +130,7 @@ export async function POST(req: Request) {
             .slice(0, 3)
             .map((s) => `${s.outlet ?? "source"} <${s.url ?? ""}>`)
             .join("; ");
-          return `[${idx + 1}] ${e.occurredAt} | ${e.placeName}, ${e.country ?? "?"} | ${e.category} | affiliation:${e.affiliation} | conf:${e.confOrigin}/${e.confActor} | usForces:${e.usForcesFlag} | ${e.title} — ${e.summary}${e.usImpact ? ` | US impact: ${e.usImpact}` : ""} | sources(${src.length}): ${srcList || "none"}`;
+          return `[${idx + 1}] ${e.occurredAt} | ${e.placeName}, ${e.country ?? "?"} | ${e.category} | affiliation:${e.affiliation} | conf:${e.confOrigin}/${e.confActor} | usForces:${e.usForcesFlag} | ${e.title} — ${e.summary}${factualUsImpact(e.usImpact as string | undefined) ? ` | US impact: ${factualUsImpact(e.usImpact as string | undefined)}` : ""} | sources(${src.length}): ${srcList || "none"}`;
         })
         .join("\n");
       return `=== ${i.aor} · ${i.serial} · window ${i.window_start} → cut-off ${i.info_cutoff} ===\n${rows || "(no events in window)"}\nSource summary: ${i.source_summary?.statement ?? "n/a"}`;

@@ -6,3 +6,4 @@ export * from './blocs';
 export * from './installations';
 export * from './dedup';
 export * from './issue';
+export * from './usimpact';
