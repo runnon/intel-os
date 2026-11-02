@@ -53,6 +53,9 @@ wouldn't scroll on phones. They also had no search, and a default view of the wh
   masthead still carries the DTG info cut-off, smaller, beside "Updated Xh ago" (UX-4).
 - **Regions lead.** Region names such as "Middle East" come first, with the command code
   small beside them.
+  The command tab row (ALL · CENTCOM · EUCOM · …) is back under the masthead in place of
+  a "Region" dropdown (Xavier, 2026-11-02): one tap to switch, every command visible. The
+  tabs keep the time window and filters; hovering a tab names its region and countries.
 - **Map key.** It is drawn with the same milsymbol frames as the map, and the
   affiliation colours are unchanged (MIL-STD-2525 semantics). It is collapsed behind a
   "Key" button on phones.
