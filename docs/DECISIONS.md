@@ -1,5 +1,54 @@
 # Decision Log
 
+## 2026-11-02 — Plain-language public map; opens on the last 3 days
+
+**Why:** simulated first-time users (two rounds of three personas on desktop and phone;
+see the PR) could not use the theater page. They met
+jargon (CENTCOM, Zulu times, CONF·ORIGIN, GAZETTEER, UNPLOTTED), a legend that covered
+the map on phones and whose swatches didn't match the symbols, and an event list that
+wouldn't scroll on phones. They also had no search, and a default view of the whole
+30-day window that buried "what happened recently".
+
+- **Default window is 3 days** (`DEFAULT_WINDOW_HOURS = 72` in `web/lib/urlState.ts`).
+  The presets are 24 hours, 3 days, 7 days and 30 days, and 30 days is the whole issue
+  window (`w=all`). A bare `?ev=` link still opens the whole window. A link to an event
+  outside the current window widens the window instead of showing nothing.
+- **Search** (`q` in the URL) filters the map and list by words in the title, summary,
+  place and country.
+- **Plain words on screen only.** The data model, exports and the analyst workspace keep
+  the spec vocabulary. The public page maps it through `web/lib/plain.ts`:
+  - Affiliation reads as who acted: "Done by forces opposed to the US", "Who did it is
+    unclear or disputed" (DATA-4 is unchanged; `unknown` stays the default).
+  - Confidence reads as "Very / Fairly / Not sure", separately for place and actor
+    (DATA-5).
+  - Social sources are labelled "(social media post)". An event not backed by two news
+    outlets says "not yet confirmed".
+- **Times** show in the reader's own time zone plus "Xh ago", with UTC on hover. The
+  masthead still carries the DTG info cut-off, smaller, beside "Updated Xh ago" (UX-4).
+- **Regions lead.** Region names such as "Middle East" come first, with the command code
+  small beside them.
+- **Map key.** It is drawn with the same milsymbol frames as the map, and the
+  affiliation colours are unchanged (MIL-STD-2525 semantics). It is collapsed behind a
+  "Key" button on phones.
+- **Phone layout.** The map takes most of the screen and the list follows below. The
+  event card is a bottom sheet. The map credit is the compact (i) control.
+- **Date-only reports.** An event whose source gave only a date is stored at
+  00:00 UTC. It shows as "Oct 18 (time not reported)" on its UTC date. Converting it to
+  local time would show the wrong day and a time nobody reported.
+- **Bases appear once zoomed in.** On the interactive map, bases show from zoom 5;
+  first-time readers took them for US events. The printed report still shows them at
+  every zoom.
+- **Phones.** One finger scrolls the page and two fingers move the map (MapLibre's
+  cooperative gestures). Wide screens keep normal map gestures.
+- **Key filtering.** Tapping a row in the key hides that kind of event; it no longer
+  shows only that kind.
+- **Map follows the filters.** The map re-fits to the results when the search or
+  filters change. "Whole region" goes back to the full issue.
+- MARK-2/3 banners are unchanged on every page.
+
+Re-entry: none of this changes a requirement. If an analyst audience needs the DTG
+list times back, add a toggle; do not remove the plain default.
+
 ## 2026-10-30 — Community reports layer: user submissions beside, never inside, the picture
 
 **Decision (Xavier):** let signed-in people send in events they have seen in public

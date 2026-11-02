@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyView, decodeView, DEFAULT_VIEW, encodeView, type FilterableEvent } from '../lib/urlState';
+import { applyView, decodeView, DEFAULT_VIEW, DEFAULT_WINDOW_HOURS, encodeView, type FilterableEvent } from '../lib/urlState';
 
 const CUTOFF = '2026-09-15T12:00:00Z';
 
@@ -24,6 +24,7 @@ describe('view state URL round-trip (UX-2)', () => {
       usOnly: true,
       confidenceFloor: 'moderate' as const,
       selectedEvent: 'abc-123',
+      q: 'taiz drone',
     };
     const decoded = decodeView(encodeView(v as any));
     expect(decoded).toEqual(v);
@@ -36,7 +37,7 @@ describe('view state URL round-trip (UX-2)', () => {
   it('rejects garbage values instead of crashing', () => {
     const p = new URLSearchParams('w=abc&aff=zombie,hostile&cat=nope&conf=extreme');
     const v = decodeView(p);
-    expect(v.windowHours).toBeNull();
+    expect(v.windowHours).toBe(DEFAULT_WINDOW_HOURS);
     expect(v.affiliations).toEqual(['hostile']);
     expect(v.categories).toEqual([]);
     expect(v.confidenceFloor).toBe('low');
@@ -46,7 +47,14 @@ describe('view state URL round-trip (UX-2)', () => {
     expect(decodeView(new URLSearchParams('w=168')).windowHours).toBe(168);
     expect(decodeView(new URLSearchParams('w=720&ev=old')).windowHours).toBe(720);
     expect(decodeView(new URLSearchParams('w=720&ev=old')).selectedEvent).toBe('old');
-    expect(decodeView(new URLSearchParams('')).windowHours).toBeNull(); // ALL
+    expect(decodeView(new URLSearchParams('w=all')).windowHours).toBeNull(); // ALL
+  });
+
+  it('a first visit opens on the last 3 days; a bare event link opens the whole window', () => {
+    expect(decodeView(new URLSearchParams('')).windowHours).toBe(DEFAULT_WINDOW_HOURS);
+    expect(decodeView(new URLSearchParams('ev=abc')).windowHours).toBeNull();
+    expect(encodeView({ ...DEFAULT_VIEW, windowHours: null }).toString()).toBe('w=all');
+    expect(decodeView(encodeView({ ...DEFAULT_VIEW, windowHours: null })).windowHours).toBeNull();
   });
 });
 
@@ -76,5 +84,14 @@ describe('applyView (UX-1: one state drives everything)', () => {
   it('empty filter lists mean "all" not "none"', () => {
     const out = applyView([ev({}), ev({ affiliation: 'neutral' })], DEFAULT_VIEW, CUTOFF);
     expect(out).toHaveLength(2);
+  });
+
+  it('search matches every word across title, place and country, and round-trips', () => {
+    const a = ev({ id: 'a', title: 'Drone strike on port', placeName: 'Hodeidah', country: 'Yemen' });
+    const b = ev({ id: 'b', title: 'Drone strike on base', placeName: 'Erbil', country: 'Iraq' });
+    expect(applyView([a, b], { ...DEFAULT_VIEW, q: 'yemen' }, CUTOFF).map((e) => e.id)).toEqual(['a']);
+    expect(applyView([a, b], { ...DEFAULT_VIEW, q: 'DRONE  iraq' }, CUTOFF).map((e) => e.id)).toEqual(['b']);
+    expect(applyView([a, b], { ...DEFAULT_VIEW, q: 'drone' }, CUTOFF)).toHaveLength(2);
+    expect(decodeView(encodeView({ ...DEFAULT_VIEW, q: 'red sea' })).q).toBe('red sea');
   });
 });

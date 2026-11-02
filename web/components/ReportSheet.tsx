@@ -101,7 +101,12 @@ export default function ReportSheet({ issue, backHref }: { issue: IssueRow; back
     [events, view, issue.info_cutoff],
   );
   const plottable = filtered.filter((e) => e.lat != null && e.lon != null);
-  const dateRange = `${zulu(issue.window_start)} – ${zulu(issue.info_cutoff)}`;
+  // The range printed is the window on screen, not the whole issue window.
+  const rangeStart =
+    view.windowHours == null
+      ? issue.window_start
+      : new Date(new Date(issue.info_cutoff).getTime() - view.windowHours * 3_600_000).toISOString();
+  const dateRange = `${zulu(rangeStart)} – ${zulu(issue.info_cutoff)}`;
 
   // Content-aware pagination: measure each rendered card, then pack whole rows
   // (4 cards) onto a page until the next row wouldn't fit — so nothing is

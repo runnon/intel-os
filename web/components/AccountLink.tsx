@@ -26,7 +26,7 @@ export default function AccountLink({ className = "" }: { className?: string }) 
     return (
       <a
         href={`/signin?next=${encodeURIComponent(here)}`}
-        className={`font-mono text-[11px] px-3 py-1.5 border border-[#171712] text-[#171712] hover:bg-[#eae4d2] ${className}`}
+        className={`font-mono text-[11px] px-3 py-1.5 border border-[#171712] text-[#171712] hover:bg-[#eae4d2] whitespace-nowrap ${className}`}
       >
         SIGN IN
       </a>

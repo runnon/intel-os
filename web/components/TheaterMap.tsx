@@ -86,6 +86,13 @@ interface Props {
   // "All theaters" mode: events span every AOR, so start on a world view and skip the
   // per-AOR overlays (blocs/installations/infra) that key on a single command.
   allTheaters?: boolean;
+  // Interactive map: whenever this changes (new filters/search/window, or a "show all"
+  // press), re-fit the view to the events now plotted so results are never off-screen.
+  fitKey?: string;
+  // "Whole region": whenever this number changes, fit every plotted event in the issue
+  // (ignoring filters), so a reader can always get back to the overview.
+  overviewKey?: number;
+  overviewEvents?: NumberedEvent[];
   // Off-by-default community layer: unverified reports drawn as plain purple dots,
   // separate from (and beneath) the event symbols. Empty/undefined = layer off.
   community?: CommunityPoint[];
@@ -149,6 +156,9 @@ export default function TheaterMap({
   community,
   selectedCommunityId = null,
   onSelectCommunity,
+  fitKey,
+  overviewKey,
+  overviewEvents,
 }: Props) {
   const onSelectStackRef = useRef(onSelectStack);
   onSelectStackRef.current = onSelectStack;
@@ -182,12 +192,19 @@ export default function TheaterMap({
       // window.print() / html-to-image captures a blank canvas (UX-5 export).
       // maplibre-gl v5 nests it under canvasContextAttributes.
       canvasContextAttributes: { preserveDrawingBuffer: forExport },
+      // Phones: the map sits in a scrolling page, so one finger scrolls the page and two
+      // move the map (MapLibre shows the hint). Wide screens keep normal map gestures.
+      cooperativeGestures: !forExport && window.matchMedia("(max-width: 767px)").matches,
+      // Map-data credit stays one tap away (OSM licence) without covering the map on phones.
+      attributionControl: { compact: true },
     });
     mapRef.current = map;
     (window as unknown as { __theaterMap?: maplibregl.Map }).__theaterMap = map;
     map.on("error", (e: maplibregl.ErrorEvent) => console.error("[theater-map]", e.error?.message ?? e));
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-left");
     map.addControl(new maplibregl.ScaleControl({ unit: "metric" }));
+    // A compact credit starts expanded; fold it to its (i) button so it doesn't sit on the map.
+    map.once("load", () => container.current?.querySelector(".maplibregl-ctrl-attrib")?.classList.remove("maplibregl-compact-show"));
 
     // Keep the canvas matched to its container (covers a container that gets its
     // size after mount, and the print reflow) so the map always fills its width.
@@ -391,6 +408,9 @@ export default function TheaterMap({
         id: "installation-symbols",
         type: "symbol",
         source: "installations",
+        // Interactive map: bases appear once zoomed in; at the overview first-time readers
+        // took them for events. The printed report keeps them at every zoom.
+        minzoom: forExport ? 0 : 5,
         layout: {
           "icon-image": ["get", "sidc"],
           "icon-size": 1,
@@ -656,7 +676,23 @@ export default function TheaterMap({
     );
   }, [events, referenceEvents, forExport]);
 
-  // highlight ring on the selected icon (drawn identically whether the event was
+  const lastOverviewKey = useRef(overviewKey);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !readyRef.current || overviewKey === lastOverviewKey.current) return;
+    lastOverviewKey.current = overviewKey;
+    fitToContent(map, (overviewEvents ?? eventsRef.current).filter((e) => e.lat != null && e.lon != null), [], true);
+  }, [overviewKey, overviewEvents]);
+
+  const lastFitKey = useRef(fitKey);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !readyRef.current || forExport || fitKey === lastFitKey.current) return;
+    lastFitKey.current = fitKey;
+    fitToContent(map, eventsRef.current, [], true);
+  }, [fitKey, forExport]);
+
+    // highlight ring on the selected icon (drawn identically whether the event was
   // picked on the map or in the side list) + recenter only when needed
   useEffect(() => {
     const map = mapRef.current;
@@ -680,6 +716,14 @@ export default function TheaterMap({
       const EDGE = 48;
       const CALLOUT_RIGHT = 350; // callout left(12) + width(330) + margin
       const offscreen = p.x < EDGE || p.x > w - EDGE || p.y < EDGE || p.y > h - EDGE;
+      // On phones the callout is a bottom sheet over the lower ~60%: keep the icon in
+      // the strip above it (offset, not padding, so later views aren't shifted).
+      if (w < 768) {
+        if (offscreen || p.y > h * 0.36) {
+          map.easeTo({ center: pos, duration: 500, offset: [0, -Math.round(h * 0.3)] });
+        }
+        return;
+      }
       const behindCallout = p.x < CALLOUT_RIGHT && p.y > 80 && p.y < h - 48;
       if (offscreen || behindCallout) {
         map.easeTo({ center: pos, zoom: Math.max(map.getZoom(), 5.6), duration: 500, padding: { left: 380 } });
